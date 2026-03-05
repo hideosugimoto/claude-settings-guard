@@ -93,3 +93,19 @@ export interface SettingsLayer {
   readonly path: string
   readonly settings: ClaudeSettings
 }
+
+// --- Profile Types ---
+
+export type ProfileName = 'minimal' | 'balanced' | 'strict'
+
+export interface Profile {
+  readonly name: ProfileName
+  readonly description: string
+  readonly deny: readonly string[]
+  readonly allow: readonly string[]
+  readonly ask?: readonly string[]
+  readonly hooks: {
+    readonly enforce: boolean
+    readonly sessionDiagnose: boolean
+  }
+}

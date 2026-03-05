@@ -3,17 +3,18 @@ import { runDiagnose } from './diagnose.js'
 import { checkMigration, applyMigration } from './migrate.js'
 import { runRecommend } from './recommend.js'
 import { initCommand } from './init.js'
-import { confirm } from '../utils/prompt.js'
+import { confirm, select } from '../utils/prompt.js'
 import { printHeader, printIssue, printMigration, printRecommendation, printSuccess, printWarning } from '../utils/display.js'
+import { getProfileNames, getProfile } from '../profiles/index.js'
+import type { ProfileName } from '../types.js'
 
-export async function setupCommand(options: { yes?: boolean }): Promise<void> {
-  printHeader('Claude Settings Guard - セットアップ')
-  process.stdout.write('対話型ガイドで設定を最適化します。\n\n')
-
-  // Step 1: Diagnose
-  process.stdout.write(chalk.bold.cyan('Step 1/4: 診断\n'))
+function printStepHeader(step: number, title: string): void {
+  process.stdout.write(chalk.bold.cyan(`Step ${step}/5: ${title}\n`))
   process.stdout.write(chalk.dim('─'.repeat(40)) + '\n')
+}
 
+async function stepDiagnose(): Promise<void> {
+  printStepHeader(1, '診断')
   const { issues, totalPatterns } = await runDiagnose()
 
   if (totalPatterns === 0 && issues.length === 0) {
@@ -30,60 +31,44 @@ export async function setupCommand(options: { yes?: boolean }): Promise<void> {
     }
   }
   process.stdout.write('\n')
+}
 
-  // Step 2: Migration
-  process.stdout.write(chalk.bold.cyan('Step 2/4: マイグレーション\n'))
-  process.stdout.write(chalk.dim('─'.repeat(40)) + '\n')
-
+async function stepMigration(autoYes: boolean): Promise<void> {
+  printStepHeader(2, 'マイグレーション')
   const migrateCheck = await checkMigration()
 
   if (!migrateCheck || migrateCheck.results.length === 0) {
     printSuccess('移行が必要なパターンはありません')
-  } else {
-    const syntaxChanges = migrateCheck.results.filter(r => r.type === 'syntax')
-    const structureChanges = migrateCheck.results.filter(r => r.type === 'structure')
+    process.stdout.write('\n')
+    return
+  }
 
-    if (structureChanges.length > 0) {
-      process.stdout.write(`構造移行: ${structureChanges.length} 件\n`)
-      for (const r of structureChanges.slice(0, 5)) {
-        printMigration(r)
-      }
-      if (structureChanges.length > 5) {
-        process.stdout.write(chalk.dim(`  ... 他 ${structureChanges.length - 5} 件\n`))
-      }
-    }
+  for (const type of ['structure', 'syntax'] as const) {
+    const changes = migrateCheck.results.filter(r => r.type === type)
+    if (changes.length === 0) continue
+    const label = type === 'structure' ? '構造移行' : '構文移行'
+    process.stdout.write(`${label}: ${changes.length} 件\n`)
+    for (const r of changes.slice(0, 5)) printMigration(r)
+    if (changes.length > 5) process.stdout.write(chalk.dim(`  ... 他 ${changes.length - 5} 件\n`))
+  }
 
-    if (syntaxChanges.length > 0) {
-      process.stdout.write(`構文移行: ${syntaxChanges.length} 件\n`)
-      for (const r of syntaxChanges.slice(0, 5)) {
-        printMigration(r)
-      }
-      if (syntaxChanges.length > 5) {
-        process.stdout.write(chalk.dim(`  ... 他 ${syntaxChanges.length - 5} 件\n`))
-      }
-    }
-
-    const shouldMigrate = options.yes || await confirm('マイグレーションを適用しますか?')
-    if (shouldMigrate) {
-      const result = await applyMigration(migrateCheck.migrated)
-      if (result.success) {
-        printSuccess('マイグレーション完了')
-        if (result.backupPath) {
-          process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
-        }
-      } else {
-        printWarning(`マイグレーション失敗: ${result.error}`)
-      }
+  const shouldMigrate = autoYes || await confirm('マイグレーションを適用しますか?')
+  if (shouldMigrate) {
+    const result = await applyMigration(migrateCheck.migrated)
+    if (result.success) {
+      printSuccess('マイグレーション完了')
+      if (result.backupPath) process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
     } else {
-      process.stdout.write('スキップしました。後で `csg migrate` で実行できます。\n')
+      printWarning(`マイグレーション失敗: ${result.error}`)
     }
+  } else {
+    process.stdout.write('スキップしました。後で `csg migrate` で実行できます。\n')
   }
   process.stdout.write('\n')
+}
 
-  // Step 3: Recommend
-  process.stdout.write(chalk.bold.cyan('Step 3/4: テレメトリ推薦\n'))
-  process.stdout.write(chalk.dim('─'.repeat(40)) + '\n')
-
+async function stepRecommend(): Promise<void> {
+  printStepHeader(3, 'テレメトリ推薦')
   const { recommendations, eventCount } = await runRecommend()
 
   if (eventCount === 0) {
@@ -92,36 +77,71 @@ export async function setupCommand(options: { yes?: boolean }): Promise<void> {
     printSuccess('推薦事項はありません。現在の設定は適切です。')
   } else {
     process.stdout.write(`${eventCount} イベントから ${recommendations.length} 件の推薦:\n`)
-    for (const rec of recommendations.slice(0, 5)) {
-      printRecommendation(rec)
-    }
+    for (const rec of recommendations.slice(0, 5)) printRecommendation(rec)
     if (recommendations.length > 5) {
       process.stdout.write(chalk.dim(`  ... 他 ${recommendations.length - 5} 件\n`))
     }
     process.stdout.write('詳細は `csg recommend` で確認してください。\n')
   }
   process.stdout.write('\n')
+}
 
-  // Step 4: Init (deny rules + enforce hook)
-  process.stdout.write(chalk.bold.cyan('Step 4/4: 二重防御セットアップ\n'))
-  process.stdout.write(chalk.dim('─'.repeat(40)) + '\n')
-  process.stdout.write('デフォルト deny ルールの追加と強制フックの生成を行います。\n')
+async function stepProfileSelect(autoYes: boolean): Promise<ProfileName> {
+  printStepHeader(4, 'プロファイル選択')
 
-  const shouldInit = options.yes || await confirm('二重防御をセットアップしますか?')
+  if (autoYes) {
+    process.stdout.write('プロファイル: balanced (デフォルト)\n\n')
+    return 'balanced'
+  }
+
+  const profileNames = getProfileNames()
+  for (const name of profileNames) {
+    const p = getProfile(name)
+    const marker = name === 'balanced' ? chalk.green(' (推奨)') : ''
+    process.stdout.write(`  ${chalk.bold(name)}${marker}: ${p.description}\n`)
+  }
+  const chosen = await select('プロファイルを選択してください', [...profileNames], 'balanced')
+  process.stdout.write('\n')
+  return chosen as ProfileName
+}
+
+async function stepInit(autoYes: boolean, profileName: ProfileName): Promise<void> {
+  printStepHeader(5, '二重防御セットアップ')
+  process.stdout.write('スラッシュコマンド、deny ルール、強制フックをセットアップします。\n')
+
+  const shouldInit = autoYes || await confirm('セットアップを実行しますか?')
   if (shouldInit) {
-    await initCommand()
+    await initCommand({ profile: profileName })
   } else {
-    process.stdout.write('スキップしました。後で `csg init` で実行できます。\n')
+    process.stdout.write('スキップしました。後で `csg init --profile <name>` で実行できます。\n')
   }
   process.stdout.write('\n')
+}
 
-  // Summary
+function printSummary(): void {
   process.stdout.write(chalk.bold.cyan('━'.repeat(40)) + '\n')
   printSuccess('セットアップ完了!')
   process.stdout.write('\n利用可能なコマンド:\n')
-  process.stdout.write('  csg diagnose   - 設定を診断\n')
-  process.stdout.write('  csg migrate    - レガシー構文を移行\n')
-  process.stdout.write('  csg recommend  - テレメトリから推薦\n')
-  process.stdout.write('  csg enforce    - 強制フックを再生成\n')
-  process.stdout.write('  csg init       - 初期セットアップ再実行\n')
+  process.stdout.write('  /csg             - Claude Code 内で設定診断\n')
+  process.stdout.write('  /csg-diagnose    - Claude Code 内で詳細診断\n')
+  process.stdout.write('  /csg-enforce     - Claude Code 内で強制フック更新\n')
+  process.stdout.write('  csg diagnose     - 設定を診断\n')
+  process.stdout.write('  csg migrate      - レガシー構文を移行\n')
+  process.stdout.write('  csg recommend    - テレメトリから推薦\n')
+  process.stdout.write('  csg enforce      - 強制フックを再生成\n')
+  process.stdout.write('  csg init         - 初期セットアップ再実行\n')
+}
+
+export async function setupCommand(options: { yes?: boolean }): Promise<void> {
+  printHeader('Claude Settings Guard - セットアップ')
+  process.stdout.write('対話型ガイドで設定を最適化します。\n\n')
+
+  const autoYes = options.yes ?? false
+
+  await stepDiagnose()
+  await stepMigration(autoYes)
+  await stepRecommend()
+  const selectedProfile = await stepProfileSelect(autoYes)
+  await stepInit(autoYes, selectedProfile)
+  printSummary()
 }

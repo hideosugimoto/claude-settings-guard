@@ -1,4 +1,5 @@
 import { defineConfig } from 'tsup'
+import { cpSync } from 'node:fs'
 
 export default defineConfig({
   entry: ['src/index.ts'],
@@ -8,5 +9,8 @@ export default defineConfig({
   clean: true,
   banner: {
     js: '#!/usr/bin/env node',
+  },
+  onSuccess: async () => {
+    cpSync('templates', 'dist/templates', { recursive: true })
   },
 })

@@ -8,7 +8,8 @@
     "claude-settings-guard": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "scripts": {
     "build": "tsup",

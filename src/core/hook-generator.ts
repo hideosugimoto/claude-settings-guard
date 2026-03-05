@@ -1,57 +1,11 @@
-import { LEGACY_COLON_PATTERN, MODERN_SPACE_PATTERN } from '../constants.js'
 import type { ClaudeSettings } from '../types.js'
-
-interface DenyRule {
-  readonly toolName: string
-  readonly pattern: string
-  readonly regex: string
-}
-
-function assertSafePattern(pattern: string): void {
-  if (/[`$;|&\n\r]/.test(pattern)) {
-    throw new Error(`Deny pattern contains unsafe shell characters: ${pattern}`)
-  }
-}
-
-function patternToRegex(pattern: string): string {
-  assertSafePattern(pattern)
-  return pattern
-    .replace(/\./g, '\\.')
-    .replace(/\*\*/g, '<<GLOBSTAR>>')
-    .replace(/\*/g, '.*')
-    .replace(/<<GLOBSTAR>>/g, '.*')
-    .replace(/\?/g, '.')
-}
-
-function parseDenyPattern(pattern: string): DenyRule | null {
-  // Legacy colon syntax
-  const legacyMatch = pattern.match(LEGACY_COLON_PATTERN)
-  if (legacyMatch) {
-    const [, toolName, arg] = legacyMatch
-    return {
-      toolName,
-      pattern,
-      regex: patternToRegex(`${arg} *`),
-    }
-  }
-
-  // Modern space syntax
-  const modernMatch = pattern.match(MODERN_SPACE_PATTERN)
-  if (modernMatch) {
-    const [, toolName, arg] = modernMatch
-    return {
-      toolName,
-      pattern,
-      regex: patternToRegex(arg),
-    }
-  }
-
-  return null
-}
+import {
+  groupRulesByTool,
+  generateBashToolCheck,
+  generateNonBashToolCheck,
+} from './hook-script-builder.js'
 
 function generateSplitSubcommands(): string {
-  // Generate bash function using string array to avoid template literal escaping issues
-  // Note: backtick command substitution is not supported (Claude Code uses $() exclusively)
   const lines = [
     '# Split shell command into subcommands (pipes, chains, substitutions)',
     'split_subcommands() {',
@@ -88,87 +42,16 @@ function generateSplitSubcommands(): string {
 }
 
 export function generateEnforceScript(denyRules: readonly string[]): string {
-  const parsedRules = denyRules
-    .map(parseDenyPattern)
-    .filter((r): r is DenyRule => r !== null)
-
-  // Group by tool name
-  const byTool = new Map<string, DenyRule[]>()
-  for (const rule of parsedRules) {
-    const existing = byTool.get(rule.toolName) ?? []
-    byTool.set(rule.toolName, [...existing, rule])
-  }
+  const byTool = groupRulesByTool(denyRules)
 
   const hasBashRules = byTool.has('Bash')
   const toolChecks: string[] = []
 
   for (const [toolName, rules] of byTool) {
     if (toolName === 'Bash') {
-      // Bash rules: split subcommands and check each one
-      // Use regex variables for macOS bash 3.2 compatibility
-      const regexVars = rules.map((r, i) => `  re_bash_${i}='^${r.regex}'`)
-      const conditions = rules.map((_r, i) =>
-        `      [[ "$subcmd" =~ $re_bash_${i} ]]`
-      )
-
-      toolChecks.push(`if [ "$TOOL_NAME" = "Bash" ]; then
-  command=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
-${regexVars.join('\n')}
-  while IFS= read -r subcmd; do
-    subcmd=$(printf '%s' "$subcmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-    [ -z "$subcmd" ] && continue
-    if
-${conditions.join(' ||\n')}
-    then
-      reason="BLOCKED by enforce-permissions: deny rule matched for Bash (subcmd: $subcmd)"
-      jq -n --arg reason "$reason" '{
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
-          permissionDecisionReason: $reason
-        }
-      }'
-      echo "$reason" >&2
-      exit 2
-    fi
-  done < <(split_subcommands "$command")
-fi`)
+      toolChecks.push(generateBashToolCheck(rules))
     } else {
-      // Non-Bash rules: direct check (no subcommand splitting)
-      // Use regex variables for macOS bash 3.2 compatibility
-      const toolPrefix = toolName.toLowerCase()
-      const regexVars: string[] = []
-      const conditions = rules.map((r, i) => {
-        if (toolName === 'Read' || toolName === 'Write' || toolName === 'Edit') {
-          regexVars.push(`  re_${toolPrefix}_${i}='${r.regex}'`)
-          return `    [[ "$file_path" =~ $re_${toolPrefix}_${i} ]]`
-        }
-        regexVars.push(`  re_${toolPrefix}_${i}='${r.regex}'`)
-        return `    [[ "$tool_input" =~ $re_${toolPrefix}_${i} ]]`
-      })
-
-      const inputExtraction = toolName === 'Read' || toolName === 'Write' || toolName === 'Edit'
-        ? '  file_path=$(printf \'%s\' "$input" | jq -r \'.tool_input.file_path // ""\')'
-        : '  tool_input=$(printf \'%s\' "$input")'
-
-      toolChecks.push(`if [ "$TOOL_NAME" = "${toolName}" ]; then
-${inputExtraction}
-${regexVars.join('\n')}
-  if
-${conditions.join(' ||\n')}
-  then
-    reason="BLOCKED by enforce-permissions: deny rule matched for ${toolName}"
-    jq -n --arg reason "$reason" '{
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: $reason
-      }
-    }'
-    echo "$reason" >&2
-    exit 2
-  fi
-fi`)
+      toolChecks.push(generateNonBashToolCheck(toolName, rules))
     }
   }
 
@@ -181,6 +64,7 @@ fi`)
 # This is a backup for settings.json deny rules that may not work due to bugs
 
 input=$(cat)
+TOOL_NAME=$(printf '%s' "$input" | jq -r '.tool_name // ""')
 ${splitFn}
 ${toolChecks.join('\n\n')}
 
