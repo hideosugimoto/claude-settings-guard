@@ -1,0 +1,43 @@
+{
+  "name": "claude-settings-guard",
+  "version": "0.2.0",
+  "description": "Claude Code settings.json permission guard - diagnose, migrate, and enforce",
+  "type": "module",
+  "bin": {
+    "csg": "./dist/index.js",
+    "claude-settings-guard": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "npm run build",
+    "start": "npx tsx src/index.ts",
+    "test": "npx vitest run",
+    "test:watch": "npx vitest"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7",
+    "@types/node": "^22.13.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "settings",
+    "permissions",
+    "guard",
+    "security"
+  ]
+}
