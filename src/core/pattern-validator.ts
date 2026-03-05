@@ -5,6 +5,7 @@ import {
   BARE_TOOL_PATTERN,
   MCP_TOOL_PATTERN,
 } from '../constants.js'
+import { checkPipeVulnerability } from '../utils/command-parser.js'
 import type { PermissionRule, DiagnosticIssue } from '../types.js'
 
 export function parsePattern(
@@ -111,6 +112,26 @@ export function validatePatterns(
       message: `Unknown tool names in ${source}`,
       details: invalidTools,
     })
+  }
+
+  // Check for pipe vulnerability in deny Bash patterns
+  if (source === 'deny') {
+    const vulnerablePatterns: string[] = []
+    for (const pattern of patterns) {
+      const issue = checkPipeVulnerability(pattern)
+      if (issue !== null) {
+        vulnerablePatterns.push(pattern)
+      }
+    }
+    if (vulnerablePatterns.length > 0) {
+      issues.push({
+        severity: 'info',
+        code: 'PIPE_VULNERABLE',
+        message: `Bash deny patterns can be bypassed via pipes, chains (&&, ||), or command substitution`,
+        details: vulnerablePatterns,
+        fix: '`csg enforce` で合成コマンド対応のフックを生成してください',
+      })
+    }
   }
 
   return issues

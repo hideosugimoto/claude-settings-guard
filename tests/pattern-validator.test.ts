@@ -110,6 +110,45 @@ describe('validatePatterns', () => {
   })
 })
 
+describe('validatePatterns — pipe vulnerability', () => {
+  it('reports PIPE_VULNERABLE for Bash deny patterns with arguments', () => {
+    const issues = validatePatterns(
+      ['Bash(sudo *)', 'Bash(rm -rf /*)'],
+      'deny'
+    )
+    const pipeIssues = issues.filter(i => i.code === 'PIPE_VULNERABLE')
+    expect(pipeIssues).toHaveLength(1)
+    expect(pipeIssues[0].severity).toBe('info')
+  })
+
+  it('does not report PIPE_VULNERABLE for non-Bash deny patterns', () => {
+    const issues = validatePatterns(
+      ['Read(**/.env)', 'Write(**/secrets/**)'],
+      'deny'
+    )
+    const pipeIssues = issues.filter(i => i.code === 'PIPE_VULNERABLE')
+    expect(pipeIssues).toHaveLength(0)
+  })
+
+  it('does not report PIPE_VULNERABLE for allow source', () => {
+    const issues = validatePatterns(
+      ['Bash(npm *)'],
+      'allow'
+    )
+    const pipeIssues = issues.filter(i => i.code === 'PIPE_VULNERABLE')
+    expect(pipeIssues).toHaveLength(0)
+  })
+
+  it('reports PIPE_VULNERABLE for legacy Bash deny patterns', () => {
+    const issues = validatePatterns(
+      ['Bash(sudo:*)'],
+      'deny'
+    )
+    const pipeIssues = issues.filter(i => i.code === 'PIPE_VULNERABLE')
+    expect(pipeIssues).toHaveLength(1)
+  })
+})
+
 describe('findConflicts', () => {
   it('finds patterns in both allow and deny', () => {
     const issues = findConflicts(
