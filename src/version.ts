@@ -8,7 +8,10 @@ function loadVersion(): string {
   for (const rel of ['..', '../..']) {
     try {
       const pkg = JSON.parse(readFileSync(join(__dirname, rel, 'package.json'), 'utf-8'))
-      return pkg.version as string
+      const version: unknown = pkg.version
+      if (typeof version === 'string' && /^\d+\.\d+\.\d+/.test(version)) {
+        return version
+      }
     } catch {
       continue
     }

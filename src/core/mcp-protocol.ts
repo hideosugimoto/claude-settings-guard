@@ -47,13 +47,14 @@ export function parseJsonRpcMessage(buffer: string): ParseResult {
       continue
     }
 
-    const bodyStart = headerEnd + 4
-    const bodyEnd = bodyStart + contentLength
+    // Use Buffer for byte-accurate body extraction (handles multibyte chars)
+    const afterHeader = remaining.slice(headerEnd + 4)
+    const afterHeaderBuf = Buffer.from(afterHeader, 'utf-8')
 
-    if (remaining.length < bodyEnd) break
+    if (afterHeaderBuf.length < contentLength) break
 
-    const body = remaining.slice(bodyStart, bodyEnd)
-    remaining = remaining.slice(bodyEnd)
+    const body = afterHeaderBuf.subarray(0, contentLength).toString('utf-8')
+    remaining = afterHeaderBuf.subarray(contentLength).toString('utf-8')
 
     try {
       const parsed = jsonRpcRequestSchema.safeParse(JSON.parse(body))

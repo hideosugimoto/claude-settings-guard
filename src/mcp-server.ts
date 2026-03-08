@@ -1,6 +1,15 @@
-import { handleDiagnose, handleRecommend, handleEnforce, handleSetup } from './mcp/tools.js'
+import { handleDiagnose, handleRecommend, handleEnforce, handleSetup, type McpToolResult } from './mcp/tools.js'
 import { parseJsonRpcMessage, createJsonRpcFrame, MAX_MESSAGE_SIZE, type JsonRpcRequest } from './core/mcp-protocol.js'
 import { VERSION } from './version.js'
+
+type ToolHandler = (args: Record<string, unknown>) => Promise<McpToolResult>
+
+const TOOL_HANDLERS: Readonly<Record<string, ToolHandler>> = {
+  csg_diagnose: () => handleDiagnose(),
+  csg_recommend: (args) => handleRecommend(args as { profile?: string }),
+  csg_enforce: (args) => handleEnforce(args as { dryRun?: boolean }),
+  csg_setup: (args) => handleSetup(args as { profile?: string }),
+}
 
 interface McpToolDefinition {
   readonly name: string
@@ -112,24 +121,12 @@ async function handleRequest(request: JsonRpcRequest): Promise<void> {
       const args = ((params as Record<string, unknown>)?.arguments ?? {}) as Record<string, unknown>
 
       try {
-        let result
-        switch (toolName) {
-          case 'csg_diagnose':
-            result = await handleDiagnose()
-            break
-          case 'csg_recommend':
-            result = await handleRecommend(args as { profile?: string })
-            break
-          case 'csg_enforce':
-            result = await handleEnforce(args as { dryRun?: boolean })
-            break
-          case 'csg_setup':
-            result = await handleSetup(args as { profile?: string })
-            break
-          default:
-            sendError(id, -32601, `Unknown tool: ${toolName}`)
-            return
+        const handler = TOOL_HANDLERS[toolName]
+        if (!handler) {
+          sendError(id, -32601, `Unknown tool: ${toolName}`)
+          return
         }
+        const result = await handler(args)
         sendResponse(id, result)
       } catch (err) {
         sendError(id, -32603, err instanceof Error ? err.message : String(err))

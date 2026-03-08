@@ -108,6 +108,50 @@ describe('mcp-protocol', () => {
     })
   })
 
+  describe('multibyte Content-Length handling', () => {
+    it('correctly parses body with multibyte characters using byte-based Content-Length', () => {
+      const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'test', params: { text: '日本語テスト' } })
+      const byteLength = Buffer.byteLength(body)
+      // Verify multibyte: byte length > character length
+      expect(byteLength).toBeGreaterThan(body.length)
+
+      const buffer = `Content-Length: ${byteLength}\r\n\r\n${body}`
+      const result = parseJsonRpcMessage(buffer)
+
+      expect(result.messages).toHaveLength(1)
+      expect(result.messages[0].method).toBe('test')
+      expect(result.remaining).toBe('')
+    })
+
+    it('correctly handles two consecutive multibyte messages', () => {
+      const body1 = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'first', params: { t: '日本語' } })
+      const body2 = JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'second', params: { t: '中文' } })
+      const buffer = `Content-Length: ${Buffer.byteLength(body1)}\r\n\r\n${body1}` +
+        `Content-Length: ${Buffer.byteLength(body2)}\r\n\r\n${body2}`
+
+      const result = parseJsonRpcMessage(buffer)
+
+      expect(result.messages).toHaveLength(2)
+      expect(result.messages[0].method).toBe('first')
+      expect(result.messages[1].method).toBe('second')
+      expect(result.remaining).toBe('')
+    })
+
+    it('handles incomplete multibyte message (not enough bytes yet)', () => {
+      const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'test', params: { t: '日本語テスト' } })
+      const byteLength = Buffer.byteLength(body)
+      // Truncate the body to simulate partial receipt
+      const partial = body.slice(0, body.length - 3)
+      const buffer = `Content-Length: ${byteLength}\r\n\r\n${partial}`
+
+      const result = parseJsonRpcMessage(buffer)
+
+      // Should not parse incomplete message
+      expect(result.messages).toHaveLength(0)
+      expect(result.remaining).toBe(buffer)
+    })
+  })
+
   describe('MAX_MESSAGE_SIZE', () => {
     it('is 10MB', () => {
       expect(MAX_MESSAGE_SIZE).toBe(10 * 1024 * 1024)

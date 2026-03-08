@@ -88,4 +88,69 @@ describe('mcp/tools', () => {
       expect(result.isError).toBe(true)
     })
   })
+
+  describe('profile validation edge cases', () => {
+    it('handleRecommend: empty string profile returns error', async () => {
+      const result = await handleRecommend({ profile: '' })
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('不明なプロファイル')
+    })
+
+    it('handleSetup: empty string profile returns error', async () => {
+      const result = await handleSetup({ profile: '' })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleRecommend: case-sensitive - Balanced (uppercase) returns error', async () => {
+      const result = await handleRecommend({ profile: 'Balanced' })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleSetup: case-sensitive - STRICT (uppercase) returns error', async () => {
+      const result = await handleSetup({ profile: 'STRICT' })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleRecommend: profile with spaces returns error', async () => {
+      const result = await handleRecommend({ profile: ' balanced ' })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleRecommend: SQL injection-like profile returns error', async () => {
+      const result = await handleRecommend({ profile: "'; DROP TABLE --" })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleSetup: very long profile name returns error', async () => {
+      const result = await handleSetup({ profile: 'a'.repeat(1000) })
+      expect(result.isError).toBe(true)
+    })
+
+    it('handleRecommend: lists valid profile names in error', async () => {
+      const result = await handleRecommend({ profile: 'invalid' })
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toContain('minimal')
+      expect(result.content[0].text).toContain('balanced')
+      expect(result.content[0].text).toContain('strict')
+    })
+
+    it('handleRecommend: all valid profiles return non-error results', async () => {
+      for (const name of ['minimal', 'balanced', 'strict']) {
+        const result = await handleRecommend({ profile: name })
+        expect(result.isError).toBeUndefined()
+        expect(result.content[0].text).toContain(name)
+      }
+    })
+
+    it('handleRecommend: minimal profile has no ask rules section', async () => {
+      const result = await handleRecommend({ profile: 'minimal' })
+      // minimal profile has no ask rules
+      expect(result.content[0].text).not.toContain('ask ルール')
+    })
+
+    it('handleSetup: includes security warning about direct apply', async () => {
+      const result = await handleSetup({ profile: 'balanced' })
+      expect(result.content[0].text).toContain('セキュリティ上')
+    })
+  })
 })
