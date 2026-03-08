@@ -14,12 +14,13 @@ function assertSafePattern(pattern: string): void {
 
 function patternToRegex(pattern: string): string {
   assertSafePattern(pattern)
-  return pattern
+  const regex = pattern
     .replace(/\./g, '\\.')
     .replace(/\*\*/g, '<<GLOBSTAR>>')
     .replace(/\*/g, '.*')
     .replace(/<<GLOBSTAR>>/g, '.*')
     .replace(/\?/g, '.')
+  return regex + '$'
 }
 
 export function parseDenyPattern(pattern: string): DenyRule | null {

@@ -146,6 +146,7 @@ async function handleRequest(request: JsonRpcRequest): Promise<void> {
 
 export async function startMcpServer(): Promise<void> {
   let buffer = ''
+  const pendingRequests = new Set<Promise<void>>()
 
   process.stdin.setEncoding('utf-8')
   process.stdin.on('data', (chunk: string) => {
@@ -165,13 +166,16 @@ export async function startMcpServer(): Promise<void> {
     }
 
     for (const message of result.messages) {
-      handleRequest(message).catch(err => {
+      const p = handleRequest(message).catch(err => {
         process.stderr.write(`MCP handler error: ${err}\n`)
-      })
+      }).finally(() => { pendingRequests.delete(p) })
+      pendingRequests.add(p)
     }
   })
 
-  process.stdin.on('end', () => {
+  process.stdin.on('end', async () => {
+    const timeout = new Promise<void>(resolve => setTimeout(resolve, 5000))
+    await Promise.race([Promise.allSettled([...pendingRequests]), timeout])
     process.exit(0)
   })
 }

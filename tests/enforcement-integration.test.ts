@@ -309,6 +309,21 @@ describe('CRITICAL: Non-Bash tool enforcement', () => {
       const r = executeHook(script, 'Read', { file_path: '/app/README.md' })
       expect(r.code).toBe(0)
     })
+
+    it('allows: /project/.envrc (NOT .env - false positive prevention)', () => {
+      const r = executeHook(script, 'Read', { file_path: '/project/.envrc' })
+      expect(r.code).toBe(0)
+    })
+
+    it('allows: /app/.environment (NOT .env - false positive prevention)', () => {
+      const r = executeHook(script, 'Read', { file_path: '/app/.environment' })
+      expect(r.code).toBe(0)
+    })
+
+    it('allows: /app/.env.example (documentation file)', () => {
+      const r = executeHook(script, 'Read', { file_path: '/app/.env.example' })
+      expect(r.code).toBe(0)
+    })
   })
 
   describe('Write tool - .env file blocking (strict profile)', () => {
@@ -657,7 +672,7 @@ describe('Pattern parsing: deny pattern to regex conversion', () => {
     const parsed = parseDenyPattern('Bash(sudo *)')
     expect(parsed).not.toBeNull()
     expect(parsed!.toolName).toBe('Bash')
-    expect(parsed!.regex).toBe('sudo .*')
+    expect(parsed!.regex).toBe('sudo .*$')
     // Verify regex behavior
     expect('sudo rm').toMatch(new RegExp(`^${parsed!.regex}`))
     expect('sudo apt install').toMatch(new RegExp(`^${parsed!.regex}`))
@@ -668,7 +683,7 @@ describe('Pattern parsing: deny pattern to regex conversion', () => {
   it('Bash(rm -rf /*) → regex correctly matches rm commands with absolute paths', () => {
     const parsed = parseDenyPattern('Bash(rm -rf /*)')
     expect(parsed).not.toBeNull()
-    expect(parsed!.regex).toBe('rm -rf /.*')
+    expect(parsed!.regex).toBe('rm -rf /.*$')
     expect('rm -rf /home').toMatch(new RegExp(`^${parsed!.regex}`))
     expect('rm -rf /').toMatch(new RegExp(`^${parsed!.regex}`))
     expect('rm -rf ./local').not.toMatch(new RegExp(`^${parsed!.regex}`))
@@ -678,17 +693,19 @@ describe('Pattern parsing: deny pattern to regex conversion', () => {
   it('Read(**/.env) → regex correctly matches .env paths', () => {
     const parsed = parseDenyPattern('Read(**/.env)')
     expect(parsed).not.toBeNull()
-    expect(parsed!.regex).toBe('.*/\\.env')
-    // Note: in bash =~, this is unanchored partial match
+    expect(parsed!.regex).toBe('.*/\\.env$')
+    // $ anchor prevents false positives on .envrc, .environment etc.
     expect('/app/.env').toMatch(new RegExp(parsed!.regex))
     expect('/home/user/.env').toMatch(new RegExp(parsed!.regex))
     expect('../../.env').toMatch(new RegExp(parsed!.regex))
+    expect('/app/.envrc').not.toMatch(new RegExp(parsed!.regex))
+    expect('/app/.environment').not.toMatch(new RegExp(parsed!.regex))
   })
 
   it('Read(**/secrets/**) → regex correctly matches secrets paths', () => {
     const parsed = parseDenyPattern('Read(**/secrets/**)')
     expect(parsed).not.toBeNull()
-    expect(parsed!.regex).toBe('.*/secrets/.*')
+    expect(parsed!.regex).toBe('.*/secrets/.*$')
     expect('/app/secrets/key').toMatch(new RegExp(parsed!.regex))
     expect('/home/secrets/db/pass').toMatch(new RegExp(parsed!.regex))
   })
