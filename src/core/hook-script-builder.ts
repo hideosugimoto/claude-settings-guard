@@ -45,7 +45,10 @@ export function groupRulesByTool(denyRules: readonly string[]): ReadonlyMap<stri
     const parsed = parseDenyPattern(rule)
     if (!parsed) continue
     const existing = result.get(parsed.toolName) ?? []
-    result.set(parsed.toolName, [...existing, parsed])
+    const isDuplicate = existing.some(r => r.regex === parsed.regex)
+    if (!isDuplicate) {
+      result.set(parsed.toolName, [...existing, parsed])
+    }
   }
 
   return result

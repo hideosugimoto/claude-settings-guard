@@ -77,6 +77,21 @@ describe('hook-script-builder', () => {
       groupRulesByTool(rules)
       expect(rules).toEqual(original)
     })
+
+    it('deduplicates rules with identical regex', () => {
+      // Simulates deny rules appearing in both permissions.deny and top-level deny
+      const rules = ['Bash(sudo *)', 'Bash(sudo *)', 'Bash(rm -rf /*)', 'Read(**/.env)', 'Read(**/.env)']
+      const grouped = groupRulesByTool(rules)
+
+      // Each unique regex should appear only once
+      const bashRules = grouped.get('Bash')!
+      const bashRegexes = bashRules.map(r => r.regex)
+      expect(new Set(bashRegexes).size).toBe(bashRegexes.length)
+
+      const readRules = grouped.get('Read')!
+      const readRegexes = readRules.map(r => r.regex)
+      expect(new Set(readRegexes).size).toBe(readRegexes.length)
+    })
   })
 
   describe('generateBashToolCheck', () => {

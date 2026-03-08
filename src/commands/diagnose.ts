@@ -57,6 +57,10 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
   return { issues: sorted, totalPatterns }
 }
 
+export function shouldExitWithError(issues: readonly DiagnosticIssue[]): boolean {
+  return issues.some(i => i.severity === 'critical' || i.severity === 'warning')
+}
+
 export interface DiagnoseCommandOptions {
   json?: boolean
   quiet?: boolean
@@ -83,7 +87,7 @@ export async function diagnoseCommand(options: DiagnoseCommandOptions = {}): Pro
 
     process.stdout.write(JSON.stringify(output, null, 2) + '\n')
 
-    if (filteredIssues.length > 0) {
+    if (shouldExitWithError(filteredIssues)) {
       process.exit(1)
     }
     return

@@ -71,29 +71,22 @@ function mergeStringArrays(
 }
 
 export function mergeSettings(layers: readonly SettingsLayer[]): ClaudeSettings {
-  const merged: ClaudeSettings = {}
-
-  for (const layer of layers) {
+  return layers.reduce<ClaudeSettings>((acc, layer) => {
     const s = layer.settings
-
-    if (s.allowedTools) {
-      merged.allowedTools = mergeStringArrays(merged.allowedTools, s.allowedTools)
+    return {
+      ...acc,
+      ...(s.allowedTools ? { allowedTools: mergeStringArrays(acc.allowedTools, s.allowedTools) } : {}),
+      ...(s.deny ? { deny: mergeStringArrays(acc.deny, s.deny) } : {}),
+      ...(s.permissions ? {
+        permissions: {
+          ...(acc.permissions ?? {}),
+          allow: mergeStringArrays(acc.permissions?.allow, s.permissions.allow),
+          deny: mergeStringArrays(acc.permissions?.deny, s.permissions.deny),
+          ask: mergeStringArrays(acc.permissions?.ask, s.permissions.ask),
+        },
+      } : {}),
     }
-    if (s.deny) {
-      merged.deny = mergeStringArrays(merged.deny, s.deny)
-    }
-    if (s.permissions) {
-      const mp = merged.permissions ?? {}
-      merged.permissions = {
-        ...mp,
-        allow: mergeStringArrays(mp.allow, s.permissions.allow),
-        deny: mergeStringArrays(mp.deny, s.permissions.deny),
-        ask: mergeStringArrays(mp.ask, s.permissions.ask),
-      }
-    }
-  }
-
-  return merged
+  }, {})
 }
 
 export function extractAllRules(settings: ClaudeSettings): {
