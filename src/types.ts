@@ -46,7 +46,7 @@ export interface PermissionRule {
 }
 
 export type Severity = 'critical' | 'warning' | 'info'
-export type IssueCode = 'LEGACY_SYNTAX' | 'STRUCTURE_ISSUE' | 'CONFLICT' | 'INVALID_TOOL' | 'INVALID_PATTERN' | 'PIPE_VULNERABLE'
+export type IssueCode = 'LEGACY_SYNTAX' | 'STRUCTURE_ISSUE' | 'CONFLICT' | 'INVALID_TOOL' | 'INVALID_PATTERN' | 'PIPE_VULNERABLE' | 'MISSING_PAIRED_DENY'
 
 export interface DiagnosticIssue {
   readonly severity: Severity

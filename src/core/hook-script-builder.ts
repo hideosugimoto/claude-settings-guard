@@ -17,10 +17,13 @@ const UNSAFE_CHAR_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
   ["'", 'single quote (shell escape)'],
   ['"', 'double quote (shell escape)'],
   ['\\', 'backslash (escape character)'],
+  ['!', 'exclamation mark (history expansion)'],
+  ['{', 'open brace (brace expansion)'],
+  ['}', 'close brace (brace expansion)'],
 ])
 
 function assertSafePattern(pattern: string): void {
-  const match = pattern.match(/[`$;|&\n\r'"\\]/)
+  const match = pattern.match(/[`$;|&\n\r'"\\!{}]/)
   if (match) {
     const char = match[0]
     const desc = UNSAFE_CHAR_DESCRIPTIONS.get(char) ?? `character '${char}'`
@@ -155,8 +158,13 @@ export function generateNonBashToolCheck(toolName: string, rules: readonly DenyR
     `    [[ "$${varName}" =~ $re_${toolPrefix}_${i} ]]`
   )
 
+  const filePathExtraction = [
+    `  file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')`,
+    `  file_path=$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')`,
+  ].join('\n')
+
   const inputExtraction = usesFilePath
-    ? `  file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')`
+    ? filePathExtraction
     : `  tool_input=$(printf '%s' "$input")`
 
   const lines: string[] = [

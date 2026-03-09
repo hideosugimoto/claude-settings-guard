@@ -1,5 +1,4 @@
-import { writeFile, readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { writeFile, readFile, rename, unlink } from 'node:fs/promises'
 import type { ClaudeSettings } from '../types.js'
 import { createBackup } from '../utils/backup.js'
 import { claudeSettingsSchema } from '../types.js'
@@ -38,15 +37,18 @@ export async function writeSettings(
     return { success: true }
   }
 
-  // Create backup
+  // Create backup (catch ENOENT instead of existsSync to avoid TOCTOU race)
   let backupPath: string | undefined
-  if (!options.skipBackup && existsSync(filePath)) {
+  if (!options.skipBackup) {
     try {
       backupPath = await createBackup(filePath)
-    } catch (err) {
-      return {
-        success: false,
-        error: `Backup failed: ${err instanceof Error ? err.message : String(err)}`,
+    } catch (err: unknown) {
+      const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
+      if (!isNotFound) {
+        return {
+          success: false,
+          error: `Backup failed: ${err instanceof Error ? err.message : String(err)}`,
+        }
       }
     }
   }
@@ -59,14 +61,14 @@ export async function writeSettings(
     const written = await readFile(tempPath, 'utf-8')
     JSON.parse(written) // Validate
     // Move into place
-    const { rename } = await import('node:fs/promises')
     await rename(tempPath, filePath)
   } catch (err) {
-    // Clean up temp file
+    // Clean up temp file (catch ENOENT instead of existsSync to avoid TOCTOU race)
     try {
-      const { unlink } = await import('node:fs/promises')
-      if (existsSync(tempPath)) await unlink(tempPath)
-    } catch {
+      await unlink(tempPath)
+    } catch (unlinkErr: unknown) {
+      const isNotFound = unlinkErr instanceof Error && 'code' in unlinkErr && (unlinkErr as NodeJS.ErrnoException).code === 'ENOENT'
+      if (!isNotFound) { /* ignore cleanup errors */ }
       // ignore cleanup errors
     }
     return {

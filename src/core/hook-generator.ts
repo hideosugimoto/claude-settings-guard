@@ -156,8 +156,20 @@ if ! command -v jq &>/dev/null; then
 fi
 
 input=$(cat)
-TOOL_NAME=$(printf '%s' "$input" | jq -r '.tool_name // ""')
+TOOL_NAME=$(printf '%s' "$input" | jq -r '.tool_name // ""' 2>/dev/null)
+
+# Fail-closed: reject if tool name is empty (malformed input)
+if [ -z "$TOOL_NAME" ]; then
+  echo "ERROR: enforce-permissions.sh: could not parse tool_name from input" >&2
+  exit 2
+fi
+
 TOOL_NAME_LOWER=$(printf '%s' "$TOOL_NAME" | tr '[:upper:]' '[:lower:]')
+
+# Treat MultiEdit as Edit for deny rule matching
+if [[ "$TOOL_NAME_LOWER" == "multiedit" ]]; then
+  TOOL_NAME_LOWER="edit"
+fi
 ${body}`
 }
 

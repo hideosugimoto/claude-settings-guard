@@ -8,11 +8,6 @@ export function printHeader(title: string): void {
   process.stdout.write(`${chalk.bold.cyan(line)}\n\n`)
 }
 
-export function printSubHeader(title: string): void {
-  process.stdout.write(`\n${chalk.bold(title)}\n`)
-  process.stdout.write(`${chalk.dim('─'.repeat(40))}\n`)
-}
-
 export function printIssue(issue: DiagnosticIssue): void {
   const badge = issue.severity === 'critical'
     ? chalk.bgRed.white.bold(' CRITICAL ')
@@ -78,10 +73,3 @@ export function printError(msg: string): void {
   process.stderr.write(`${chalk.red('ERROR')} ${msg}\n`)
 }
 
-export function formatPattern(pattern: string): string {
-  const match = pattern.match(/^(\w+)\((.+)\)$/)
-  if (match) {
-    return `${chalk.cyan(match[1])}(${chalk.yellow(match[2])})`
-  }
-  return chalk.cyan(pattern)
-}

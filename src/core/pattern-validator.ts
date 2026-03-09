@@ -137,6 +137,52 @@ export function validatePatterns(
   return issues
 }
 
+/**
+ * Check for Read deny rules that lack corresponding Edit/Write deny rules.
+ * Emits info-level suggestions to help users close coverage gaps.
+ */
+export function checkMissingPairedDenyRules(
+  denyRules: readonly string[]
+): readonly DiagnosticIssue[] {
+  const pairings: ReadonlyArray<{ readonly from: string; readonly to: string }> = [
+    { from: 'Read', to: 'Edit' },
+    { from: 'Read', to: 'Write' },
+  ]
+
+  const issues: DiagnosticIssue[] = []
+
+  for (const { from, to } of pairings) {
+    const missingPatterns: string[] = []
+
+    for (const rule of denyRules) {
+      const parsed = parsePattern(rule, 'deny')
+      if (parsed.toolName !== from || !parsed.argument) continue
+
+      const expectedPattern = `${to}(${parsed.argument})`
+      const hasPair = denyRules.some(r => {
+        const p = parsePattern(r, 'deny')
+        return p.toolName === to && p.argument === parsed.argument
+      })
+
+      if (!hasPair) {
+        missingPatterns.push(expectedPattern)
+      }
+    }
+
+    if (missingPatterns.length > 0) {
+      issues.push({
+        severity: 'info',
+        code: 'MISSING_PAIRED_DENY',
+        message: `${from} deny rules exist without matching ${to} deny rules. Consider adding ${to} deny rules for complete protection.`,
+        details: missingPatterns,
+        fix: `Add the suggested ${to} deny rules to close coverage gaps`,
+      })
+    }
+  }
+
+  return issues
+}
+
 export function findConflicts(
   allowRules: readonly string[],
   denyRules: readonly string[]

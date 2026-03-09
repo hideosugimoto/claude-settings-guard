@@ -502,7 +502,7 @@ describe('Bypass resistance', () => {
       // Even if TOOL_NAME env var is set to something else,
       // the script re-extracts it from JSON input
       const scriptContent = createTestScript(BALANCED_DENY)
-      expect(scriptContent).toContain("TOOL_NAME=$(printf '%s' \"$input\" | jq -r '.tool_name // \"\"')")
+      expect(scriptContent).toContain("TOOL_NAME=$(printf '%s' \"$input\" | jq -r '.tool_name // \"\"' 2>/dev/null)")
     })
   })
 

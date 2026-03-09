@@ -1,11 +1,17 @@
 import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import { claudeSettingsSchema, type ClaudeSettings, type SettingsLayer } from '../types.js'
 import { getGlobalSettingsPath, getLocalSettingsPath, getProjectSettingsPath } from '../utils/paths.js'
 
 export async function readSettingsFile(filePath: string): Promise<ClaudeSettings | null> {
-  if (!existsSync(filePath)) return null
-  const raw = await readFile(filePath, 'utf-8')
+  let raw: string
+  try {
+    raw = await readFile(filePath, 'utf-8')
+  } catch (err: unknown) {
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null
+    }
+    throw err
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
