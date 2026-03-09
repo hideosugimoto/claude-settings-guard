@@ -1,5 +1,10 @@
 # claude-settings-guard (csg)
 
+[![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-340%20passed-brightgreen)]()
+
 [日本語](#日本語) | [English](#english)
 
 ---
@@ -37,6 +42,7 @@ npx claude-settings-guard -y
 | 毎回 Yes を押す手間が多い | 頻繁に使うツールが allow に未登録 | `csg recommend` でテレメトリベースの推薦 |
 | 設定の構造が古い | トップレベル→`permissions.*` への移行が必要 | `csg migrate` で構造ごと自動変換 |
 | `.env` や秘密ファイルが読まれるリスク | deny 設定が不十分 | プロファイルで推奨 deny ルールを一括適用 |
+| `curl ... \| sh` で deny をバイパスされる | 複合コマンドの解析不足 | Layer 2 フックが `&&`, `\|\|`, `\|`, `$()` を分解して個別検査 |
 
 ### アーキテクチャ: 二重防御システム
 
@@ -49,9 +55,19 @@ npx claude-settings-guard -y
         | (バグで通過した場合)
  Layer 2: PreToolUse Hook (独立した番犬)
         bash 正規表現で deny ルールを再チェック
-        複合コマンド (&&, ||, |, $()) も分解して検査
+        複合コマンド (&&, ||, |, $(), <()) も分解して個別検査
         --> 一致すれば exit 2 で強制ブロック
 ```
+
+### 設定レイヤー
+
+csg は 3 階層の設定ファイルをマージして診断します:
+
+| レイヤー | パス | 用途 |
+|---------|------|------|
+| グローバル | `~/.claude/settings.json` | ユーザー全体の基本設定 |
+| ローカル | `~/.claude/settings.local.json` | マシン固有の上書き（git 管理外） |
+| プロジェクト | `.claude/settings.json` | プロジェクト固有の設定 |
 
 ---
 
@@ -111,6 +127,7 @@ csg init --profile strict    # プロファイル指定
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask ルールが追加される
+├── backups/                   ← 設定変更前の自動バックアップ
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 強制フック
 │   └── session-diagnose.sh    ← 起動時自動診断 (strict のみ)
@@ -119,6 +136,8 @@ csg init --profile strict    # プロファイル指定
     ├── csg-diagnose.md        ← /csg-diagnose
     └── csg-enforce.md         ← /csg-enforce
 ```
+
+> 設定の変更時には `~/.claude/backups/` にタイムスタンプ付きバックアップが自動作成されます。
 
 #### 導入後の確認
 
@@ -188,6 +207,20 @@ csg enforce --dry-run
 | `csg init [--profile NAME] [--force]` | 初回セットアップ: スラッシュコマンド・プロファイル・フックを配置 |
 | `csg mcp` | MCP サーバーとして起動 (Claude Code 統合) |
 
+#### 終了コード
+
+| コード | 条件 |
+|--------|------|
+| `0` | 問題なし、または INFO レベルのみ |
+| `1` | CRITICAL または WARNING レベルの問題が検出された（`--json` 使用時） |
+
+CI/CD で設定品質をゲートに利用できます:
+
+```bash
+# CI パイプラインで設定の健全性をチェック
+npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detected"
+```
+
 ### 診断で検出する問題
 
 | コード | 重要度 | 内容 |
@@ -198,6 +231,15 @@ csg enforce --dry-run
 | `CONFLICT` | WARNING | allow と deny の競合 |
 | `INVALID_PATTERN` | WARNING | パターン構文エラー |
 | `PIPE_VULNERABLE` | INFO | パイプによるバイパスの可能性 → Layer 2 で対処 |
+
+### テレメトリ推薦
+
+`csg recommend` は `~/.claude/telemetry/` のイベントを分析し、以下の基準で推薦を行います:
+
+| 推薦 | 条件 |
+|------|------|
+| allow に追加 | 同一ツールを 3 回以上手動許可している場合 |
+| deny に追加 | 同一ツールを 2 回以上拒否している場合 |
 
 ### MCP サーバー統合
 
@@ -217,12 +259,12 @@ Claude Code から直接設定を確認・改善できます。
 
 利用可能な MCP ツール:
 
-| ツール | 説明 |
-|--------|------|
-| `csg_diagnose` | 設定を診断して問題を返す |
-| `csg_recommend` | プロファイルに基づく改善提案 |
-| `csg_enforce` | Layer 2 フックを生成・更新 (dry-run 対応) |
-| `csg_setup` | プロファイル適用ガイド |
+| ツール | 引数 | 説明 |
+|--------|------|------|
+| `csg_diagnose` | なし | 設定を診断して問題を返す |
+| `csg_recommend` | `profile?` | プロファイルに基づく改善提案 |
+| `csg_enforce` | `dryRun?` | Layer 2 フックを生成・更新 (dry-run 対応) |
+| `csg_setup` | `profile?` | プロファイル適用ガイド |
 
 ### 開発
 
@@ -231,8 +273,37 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (340 tests)
+npm test               # テスト実行 (16 files, 340 tests)
 npx tsx src/index.ts   # ローカル実行
+```
+
+#### プロジェクト構成
+
+```
+src/
+├── index.ts              # CLI エントリポイント
+├── commands/             # 各サブコマンドの実装
+│   ├── setup.ts          # 5ステップ対話型ウィザード
+│   ├── diagnose.ts       # 診断
+│   ├── migrate.ts        # マイグレーション
+│   ├── recommend.ts      # テレメトリ推薦
+│   ├── enforce.ts        # フック生成
+│   ├── init.ts           # 初期化
+│   └── deploy-slash.ts   # スラッシュコマンド配置
+├── core/                 # コアロジック
+│   ├── settings-reader.ts    # 3層設定読み込み・マージ
+│   ├── settings-writer.ts    # 設定書き込み（自動バックアップ付き）
+│   ├── pattern-validator.ts  # パターン検証
+│   ├── pattern-migrator.ts   # 構文・構造マイグレーション
+│   ├── hook-generator.ts     # 強制フック生成
+│   ├── hook-script-builder.ts # シェルスクリプト構築
+│   ├── session-hook.ts       # セッション起動時フック
+│   ├── telemetry-analyzer.ts # テレメトリ分析
+│   └── mcp-protocol.ts      # JSON-RPC 2.0 フレーミング
+├── mcp-server.ts         # MCP サーバー
+├── profiles/             # プロファイル定義
+├── types.ts              # Zod スキーマ・型定義
+└── constants.ts          # 定数・既知ツール一覧
 ```
 
 ---
@@ -270,6 +341,7 @@ npx claude-settings-guard -y
 | Too many manual "Yes" confirmations | Frequently used tools not in allow list | `csg recommend` provides telemetry-based suggestions |
 | Outdated settings structure | Need migration to `permissions.*` | `csg migrate` handles structure + syntax |
 | Risk of `.env` or secret files being read | Insufficient deny rules | Profiles apply recommended deny rules in bulk |
+| `curl ... \| sh` bypasses deny rules | Compound commands not analyzed | Layer 2 hook decomposes `&&`, `\|\|`, `\|`, `$()` and checks each part |
 
 ### Architecture: Dual-Layer Defense
 
@@ -282,9 +354,20 @@ Tool execution request
         | (if bug lets it through)
  Layer 2: PreToolUse Hook (independent watchdog)
         Re-evaluates deny rules with bash regex
-        Decomposes compound commands (&&, ||, |, $())
+        Decomposes compound commands (&&, ||, |, $(), <())
+        Checks each part independently against deny rules
         --> exit 2 to force-block on match
 ```
+
+### Settings Layers
+
+csg reads and merges settings from 3 layers:
+
+| Layer | Path | Purpose |
+|-------|------|---------|
+| Global | `~/.claude/settings.json` | User-wide base settings |
+| Local | `~/.claude/settings.local.json` | Machine-specific overrides (not in git) |
+| Project | `.claude/settings.json` | Project-specific settings |
 
 ---
 
@@ -344,6 +427,7 @@ csg init --profile strict    # Profile-based init
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask rules added
+├── backups/                   ← Auto-backups before changes
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 enforcement hook
 │   └── session-diagnose.sh    ← Startup auto-diagnostics (strict only)
@@ -352,6 +436,8 @@ csg init --profile strict    # Profile-based init
     ├── csg-diagnose.md        ← /csg-diagnose
     └── csg-enforce.md         ← /csg-enforce
 ```
+
+> Settings changes automatically create timestamped backups in `~/.claude/backups/`.
 
 #### Post-Installation Verification
 
@@ -421,6 +507,20 @@ Blocks network commands. For security-critical environments.
 | `csg init [--profile NAME] [--force]` | First-time setup: deploy slash commands, profiles, and hooks |
 | `csg mcp` | Start as MCP server for Claude Code integration |
 
+#### Exit Codes
+
+| Code | Condition |
+|------|-----------|
+| `0` | No issues, or INFO-level issues only |
+| `1` | CRITICAL or WARNING issues detected (with `--json`) |
+
+Use in CI/CD to gate settings quality:
+
+```bash
+# Check settings health in CI pipeline
+npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detected"
+```
+
 ### Diagnostic Issue Codes
 
 | Code | Severity | Description |
@@ -431,6 +531,15 @@ Blocks network commands. For security-critical environments.
 | `CONFLICT` | WARNING | Pattern in both allow and deny |
 | `INVALID_PATTERN` | WARNING | Pattern syntax error |
 | `PIPE_VULNERABLE` | INFO | Pipe bypass risk → addressed by Layer 2 |
+
+### Telemetry Recommendations
+
+`csg recommend` analyzes events from `~/.claude/telemetry/` using these thresholds:
+
+| Recommendation | Condition |
+|----------------|-----------|
+| Add to allow | Tool manually approved 3+ times |
+| Add to deny | Tool rejected 2+ times |
 
 ### MCP Server Integration
 
@@ -450,12 +559,12 @@ Let Claude directly check and improve settings.
 
 Available MCP tools:
 
-| Tool | Description |
-|------|-------------|
-| `csg_diagnose` | Diagnose settings and return issues |
-| `csg_recommend` | Suggest improvements based on profile |
-| `csg_enforce` | Generate/update Layer 2 hook (dry-run supported) |
-| `csg_setup` | Profile application guide |
+| Tool | Arguments | Description |
+|------|-----------|-------------|
+| `csg_diagnose` | None | Diagnose settings and return issues |
+| `csg_recommend` | `profile?` | Suggest improvements based on profile |
+| `csg_enforce` | `dryRun?` | Generate/update Layer 2 hook (dry-run supported) |
+| `csg_setup` | `profile?` | Profile application guide |
 
 ### Development
 
@@ -464,8 +573,37 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (340 tests)
+npm test               # Run tests (16 files, 340 tests)
 npx tsx src/index.ts   # Run locally
+```
+
+#### Project Structure
+
+```
+src/
+├── index.ts              # CLI entry point
+├── commands/             # Subcommand implementations
+│   ├── setup.ts          # 5-step interactive wizard
+│   ├── diagnose.ts       # Diagnostics
+│   ├── migrate.ts        # Migration
+│   ├── recommend.ts      # Telemetry recommendations
+│   ├── enforce.ts        # Hook generation
+│   ├── init.ts           # Initialization
+│   └── deploy-slash.ts   # Slash command deployment
+├── core/                 # Core logic
+│   ├── settings-reader.ts    # 3-layer settings loading & merging
+│   ├── settings-writer.ts    # Settings write (with auto-backup)
+│   ├── pattern-validator.ts  # Pattern validation
+│   ├── pattern-migrator.ts   # Syntax & structure migration
+│   ├── hook-generator.ts     # Enforcement hook generation
+│   ├── hook-script-builder.ts # Shell script building
+│   ├── session-hook.ts       # Session startup hook
+│   ├── telemetry-analyzer.ts # Telemetry analysis
+│   └── mcp-protocol.ts      # JSON-RPC 2.0 framing
+├── mcp-server.ts         # MCP server
+├── profiles/             # Profile definitions
+├── types.ts              # Zod schemas & type definitions
+└── constants.ts          # Constants & known tools list
 ```
 
 ---
