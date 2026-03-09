@@ -16,7 +16,7 @@ describe('generateEnforceScript', () => {
 
   it('handles Bash deny rules', () => {
     const script = generateEnforceScript(['Bash(sudo *)', 'Bash(rm -rf /*)'])
-    expect(script).toContain('TOOL_NAME" = "Bash"')
+    expect(script).toContain('TOOL_NAME_LOWER" == "bash"')
     expect(script).toContain('command')
     expect(script).toContain('sudo')
     expect(script).toContain('rm -rf')
@@ -24,7 +24,7 @@ describe('generateEnforceScript', () => {
 
   it('handles Read deny rules', () => {
     const script = generateEnforceScript(['Read(**/.env)', 'Read(**/secrets/**)'])
-    expect(script).toContain('TOOL_NAME" = "Read"')
+    expect(script).toContain('TOOL_NAME_LOWER" == "read"')
     expect(script).toContain('file_path')
   })
 
@@ -40,8 +40,8 @@ describe('generateEnforceScript', () => {
       'Read(**/.env)',
       'Bash(rm -rf /*)',
     ])
-    expect(script).toContain('TOOL_NAME" = "Bash"')
-    expect(script).toContain('TOOL_NAME" = "Read"')
+    expect(script).toContain('TOOL_NAME_LOWER" == "bash"')
+    expect(script).toContain('TOOL_NAME_LOWER" == "read"')
   })
 
   it('generates empty checks for empty rules', () => {

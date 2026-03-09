@@ -304,16 +304,16 @@ describe('T1: bypass-analyzer comprehensive tests', () => {
   })
 
   describe('hook mitigation coverage', () => {
-    it('marks all 8 hooked techniques as mitigated when hook installed', () => {
+    it('marks all 9 hooked techniques as mitigated when hook installed', () => {
       const result = analyzeBypassRisks(['Bash(rm -rf /)'], true)
       const mitigated = result.ruleAnalysis[0].bypasses.filter(b => b.mitigatedByHook)
-      expect(mitigated).toHaveLength(8)
+      expect(mitigated).toHaveLength(9)
     })
 
-    it('marks all 4 unhooked techniques as not mitigated even with hook', () => {
+    it('marks all 3 unhooked techniques as not mitigated even with hook', () => {
       const result = analyzeBypassRisks(['Bash(rm -rf /)'], true)
       const unmitigated = result.ruleAnalysis[0].bypasses.filter(b => !b.mitigatedByHook)
-      expect(unmitigated).toHaveLength(4)
+      expect(unmitigated).toHaveLength(3)
     })
 
     it('marks no techniques as mitigated when hook not installed', () => {
@@ -377,7 +377,7 @@ describe('P1: HOOKED_TECHNIQUES as Set performance', () => {
     expect(result.denyRulesAnalyzed).toBe(50)
     for (const rule of result.ruleAnalysis) {
       const hooked = rule.bypasses.filter(b => b.mitigatedByHook)
-      expect(hooked).toHaveLength(8)
+      expect(hooked).toHaveLength(9)
     }
   })
 })

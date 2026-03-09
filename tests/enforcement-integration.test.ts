@@ -526,39 +526,35 @@ describe('Bypass resistance', () => {
       expect(r.code).toBe(0)
     })
 
-    it('correctly handles tool name case: "Bash" vs "bash"', () => {
+    it('correctly handles tool name case: "Bash" vs "bash" (case-insensitive)', () => {
       // Claude Code sends "Bash" (capital B)
       const r1 = executeHook(script, 'Bash', { command: 'sudo rm' })
       expect(r1.code).toBe(2) // Should block
 
-      // If somehow "bash" (lowercase) is sent, it should NOT match "Bash"
+      // "bash" (lowercase) should also be caught (case-insensitive matching)
       const r2 = executeHook(script, 'bash', { command: 'sudo rm' })
-      expect(r2.code).toBe(0) // Script checks TOOL_NAME = "Bash" (exact match)
+      expect(r2.code).toBe(2) // Now blocked thanks to case-insensitive matching
     })
   })
 
-  describe('known limitation: multi-space bypass', () => {
-    // This is a KNOWN LIMITATION - documenting it as a test
-    it('KNOWN LIMITATION: extra spaces in rm -rf  / bypass the check', () => {
-      // "rm  -rf  /home" has double spaces, regex ^rm -rf /.* expects single
+  describe('fixed: multi-space bypass now blocked', () => {
+    it('blocks extra spaces in rm -rf  / (whitespace normalization)', () => {
+      // "rm  -rf  /home" has double spaces, now normalized before matching
       const r = executeHook(script, 'Bash', { command: 'rm  -rf  /home' })
-      // This WILL pass through - documenting as known limitation
-      expect(r.code).toBe(0) // Known bypass - documented
+      expect(r.code).toBe(2) // Fixed - whitespace is now collapsed
     })
   })
 
-  describe('known limitation: env/command prefix bypass', () => {
-    it('KNOWN LIMITATION: env sudo bypasses check', () => {
-      // "env sudo rm" starts with "env", not "sudo"
+  describe('fixed: env/command prefix bypass now blocked', () => {
+    it('blocks env sudo (prefix command stripping)', () => {
+      // "env sudo rm" - prefix "env" is now stripped before matching
       const r = executeHook(script, 'Bash', { command: 'env sudo rm -rf /' })
-      // After split, subcommand is "env sudo rm -rf /"
-      // Regex ^sudo .* doesn't match because it starts with "env"
-      expect(r.code).toBe(0) // Known bypass - documented
+      expect(r.code).toBe(2) // Fixed - prefix commands are stripped
     })
 
-    it('KNOWN LIMITATION: /usr/bin/sudo bypasses check', () => {
+    it('blocks /usr/bin/sudo (path prefix stripping)', () => {
       const r = executeHook(script, 'Bash', { command: '/usr/bin/sudo rm -rf /' })
-      expect(r.code).toBe(0) // Known bypass - documented
+      expect(r.code).toBe(2) // Fixed - path prefixes are stripped
     })
   })
 })

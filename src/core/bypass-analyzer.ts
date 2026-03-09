@@ -61,13 +61,13 @@ const HOOKED_TECHNIQUES: ReadonlySet<BypassTechnique> = new Set<BypassTechnique>
   'process_substitution',
   'subshell',
   'brace_group',
+  'background_exec',
 ])
 
 const UNHOOKED_TECHNIQUES: readonly BypassTechnique[] = [
   'env_variable_expansion',
   'eval_exec',
   'encoding_tricks',
-  'background_exec',
 ]
 
 const ALL_TECHNIQUES: readonly TechniqueMeta[] = [

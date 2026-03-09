@@ -1,4 +1,4 @@
-import { LEGACY_COLON_PATTERN, MODERN_SPACE_PATTERN } from '../constants.js'
+import { LEGACY_COLON_PATTERN, MODERN_SPACE_PATTERN, SAFE_ENV_SUFFIXES } from '../constants.js'
 
 export interface DenyRule {
   readonly toolName: string
@@ -6,9 +6,27 @@ export interface DenyRule {
   readonly regex: string
 }
 
+const UNSAFE_CHAR_DESCRIPTIONS: ReadonlyMap<string, string> = new Map([
+  ['`', 'backtick (command substitution)'],
+  ['$', 'dollar sign (variable/command expansion)'],
+  [';', 'semicolon (command chaining)'],
+  ['|', 'pipe (command piping)'],
+  ['&', 'ampersand (background/chaining)'],
+  ['\n', 'newline'],
+  ['\r', 'carriage return'],
+  ["'", 'single quote (shell escape)'],
+  ['"', 'double quote (shell escape)'],
+  ['\\', 'backslash (escape character)'],
+])
+
 function assertSafePattern(pattern: string): void {
-  if (/[`$;|&\n\r'"\\]/.test(pattern)) {
-    throw new Error(`Deny pattern contains unsafe shell characters: ${pattern}`)
+  const match = pattern.match(/[`$;|&\n\r'"\\]/)
+  if (match) {
+    const char = match[0]
+    const desc = UNSAFE_CHAR_DESCRIPTIONS.get(char) ?? `character '${char}'`
+    throw new Error(
+      `Deny pattern contains unsafe shell characters: pattern "${pattern}" has ${desc}`
+    )
   }
 }
 
@@ -68,18 +86,41 @@ function generateDenyResponse(toolName: string): string {
     exit 2`
 }
 
+function generateSafeEnvExclusionLines(): string[] {
+  const suffixes = SAFE_ENV_SUFFIXES.map(s => `"${s}"`).join(' ')
+  return [
+    `  # Exclude safe .env suffixes (e.g. .env.example, .env.sample)`,
+    `  safe_env_suffixes=(${suffixes})`,
+    `  is_safe_env=false`,
+    `  for suffix in "\${safe_env_suffixes[@]}"; do`,
+    `    if [[ "$file_path" == *".env.$suffix" ]]; then`,
+    `      is_safe_env=true`,
+    `      break`,
+    `    fi`,
+    `  done`,
+    `  if [ "$is_safe_env" = true ]; then`,
+    `    # Allow safe .env files to pass through`,
+    `    :`,
+    `  elif`,
+  ]
+}
+
 export function generateBashToolCheck(rules: readonly DenyRule[]): string {
   const regexVars = rules.map((r, i) => `  re_bash_${i}='^${r.regex}'`)
   const conditions = rules.map((_r, i) =>
     `      [[ "$subcmd" =~ $re_bash_${i} ]]`
   )
 
-  return `if [ "$TOOL_NAME" = "Bash" ]; then
+  return `if [[ "$TOOL_NAME_LOWER" == "bash" ]]; then
   command=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
 ${regexVars.join('\n')}
   while IFS= read -r subcmd; do
     subcmd=$(printf '%s' "$subcmd" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
     [ -z "$subcmd" ] && continue
+    # Normalize: collapse whitespace, strip path prefix, strip prefix commands
+    subcmd=$(printf '%s' "$subcmd" | sed -E 's/[[:space:]]+/ /g')
+    subcmd=$(printf '%s' "$subcmd" | sed -E 's|^/[^ ]*/||')
+    subcmd=$(strip_prefix_commands "$subcmd")
     if
 ${conditions.join(' ||\n')}
     then
@@ -118,13 +159,23 @@ export function generateNonBashToolCheck(toolName: string, rules: readonly DenyR
     ? `  file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')`
     : `  tool_input=$(printf '%s' "$input")`
 
-  return `if [ "$TOOL_NAME" = "${toolName}" ]; then
-${inputExtraction}
-${regexVars.join('\n')}
-  if
-${conditions.join(' ||\n')}
-  then
-${generateDenyResponse(toolName)}
-  fi
-fi`
+  const lines: string[] = [
+    `if [[ "$TOOL_NAME_LOWER" == "${toolPrefix}" ]]; then`,
+    inputExtraction,
+    ...regexVars,
+  ]
+
+  if (usesFilePath) {
+    lines.push(...generateSafeEnvExclusionLines())
+  } else {
+    lines.push('  if')
+  }
+
+  lines.push(conditions.join(' ||\n'))
+  lines.push('  then')
+  lines.push(generateDenyResponse(toolName))
+  lines.push('  fi')
+  lines.push('fi')
+
+  return lines.join('\n')
 }

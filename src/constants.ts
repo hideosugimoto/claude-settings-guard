@@ -10,18 +10,27 @@ export type KnownTool = typeof KNOWN_TOOLS[number]
 export const DANGEROUS_COMMANDS = [
   'sudo', 'su', 'rm -rf /', 'rm -rf ~',
   'chmod 777', 'dd if=', ':(){:|:&};:',
+  'mkfs', 'fdisk', 'mount', 'umount',
+  'iptables', 'systemctl', 'kill -9',
 ] as const
 
 export const SENSITIVE_FILE_PATTERNS = [
   '**/.env', '**/.env.*', '**/secrets/**',
-  '**/*secret*', '**/*credential*',
+  '**/*.secret', '**/*.secrets',
+  '**/*credential*',
   '**/*.pem', '**/*.key',
+] as const
+
+export const SAFE_ENV_SUFFIXES = [
+  'example', 'sample', 'template', 'dist',
 ] as const
 
 export const DEFAULT_DENY_RULES: readonly string[] = [
   'Bash(sudo *)', 'Bash(su *)', 'Bash(rm -rf /*)', 'Bash(rm -rf ~*)',
   'Read(**/.env)', 'Read(**/.env.*)', 'Read(**/secrets/**)',
-  'Read(**/*secret*)', 'Read(**/*credential*)',
+  'Read(**/*.secret)', 'Read(**/*credential*)',
+  'Write(**/.env)', 'Write(**/.env.*)', 'Write(**/secrets/**)',
+  'Edit(**/.env)', 'Edit(**/.env.*)', 'Edit(**/secrets/**)',
 ]
 
 export const LEGACY_COLON_PATTERN = /^(\w+)\((.+):(\*)\)$/

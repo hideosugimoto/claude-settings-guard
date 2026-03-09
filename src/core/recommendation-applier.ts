@@ -51,8 +51,8 @@ export function applyRecommendations(
     ...settings,
     permissions: {
       ...currentPermissions,
-      ...(nextAllow ? { allow: nextAllow } : {}),
-      ...(nextDeny ? { deny: nextDeny } : {}),
+      ...(nextAllow ? { allow: [...nextAllow] } : {}),
+      ...(nextDeny ? { deny: [...nextDeny] } : {}),
     },
   }
 
