@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-340%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-356%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -202,7 +202,7 @@ csg enforce --dry-run
 | `csg` / `csg setup` | 対話型ガイドセットアップ (デフォルト) |
 | `csg diagnose [--json] [--quiet]` | settings.json を診断し、問題を検出する |
 | `csg migrate [--dry-run]` | レガシー構文をモダン構文に一括変換する |
-| `csg recommend` | テレメトリデータを分析し、権限設定を推薦する |
+| `csg recommend [-y\|--yes]` | テレメトリデータを分析し、権限設定を推薦・自動適用する |
 | `csg enforce [--dry-run]` | deny ルールの強制フック (PreToolUse) を生成・登録する |
 | `csg init [--profile NAME] [--force]` | 初回セットアップ: スラッシュコマンド・プロファイル・フックを配置 |
 | `csg mcp` | MCP サーバーとして起動 (Claude Code 統合) |
@@ -241,6 +241,29 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | allow に追加 | 同一ツールを 3 回以上手動許可している場合 |
 | deny に追加 | 同一ツールを 2 回以上拒否している場合 |
 
+#### パターングルーピング
+
+同じプレフィックスを持つコマンドが 3 つ以上あると、ワイルドカードパターンにグルーピングして推薦します:
+
+```
+Bash(npm install lodash)  ─┐
+Bash(npm install express) ─┼→ Bash(npm install *) を allow に追加
+Bash(npm install chalk)   ─┘
+```
+
+`npm`, `git`, `cargo`, `pip` 等のパッケージマネージャ/VCS コマンドは 2 トークン（例: `npm install`）でグルーピングし、その他は 1 トークン（例: `ls`）でグルーピングします。
+
+#### 自動適用
+
+推薦の表示後、対話的に適用を確認できます。`--yes` フラグで確認をスキップできます:
+
+```bash
+csg recommend        # 推薦を表示 → 「適用しますか？ [Y/n]」
+csg recommend --yes  # 確認なしで自動適用
+```
+
+適用時に deny ルールが追加された場合、Layer 2 強制フックが自動的に再生成されます。
+
 ### MCP サーバー統合
 
 Claude Code から直接設定を確認・改善できます。
@@ -273,7 +296,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (16 files, 340 tests)
+npm test               # テスト実行 (19 files, 356 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -296,7 +319,10 @@ src/
 │   ├── pattern-validator.ts  # パターン検証
 │   ├── pattern-migrator.ts   # 構文・構造マイグレーション
 │   ├── hook-generator.ts     # 強制フック生成
+│   ├── hook-regenerator.ts   # フック再生成の共通ロジック
 │   ├── hook-script-builder.ts # シェルスクリプト構築
+│   ├── pattern-grouper.ts    # コマンドプレフィックスのグルーピング
+│   ├── recommendation-applier.ts # 推薦の自動適用
 │   ├── session-hook.ts       # セッション起動時フック
 │   ├── telemetry-analyzer.ts # テレメトリ分析
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 フレーミング
@@ -502,7 +528,7 @@ Blocks network commands. For security-critical environments.
 | `csg` / `csg setup` | Interactive guided setup (default) |
 | `csg diagnose [--json] [--quiet]` | Audit settings.json for issues |
 | `csg migrate [--dry-run]` | Batch-convert legacy syntax to modern format |
-| `csg recommend` | Analyze telemetry and suggest permission changes |
+| `csg recommend [-y\|--yes]` | Analyze telemetry, suggest and auto-apply permission changes |
 | `csg enforce [--dry-run]` | Generate enforcement hook from deny rules |
 | `csg init [--profile NAME] [--force]` | First-time setup: deploy slash commands, profiles, and hooks |
 | `csg mcp` | Start as MCP server for Claude Code integration |
@@ -541,6 +567,29 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | Add to allow | Tool manually approved 3+ times |
 | Add to deny | Tool rejected 2+ times |
 
+#### Pattern Grouping
+
+When 3+ commands share the same prefix, they are grouped into a wildcard pattern:
+
+```
+Bash(npm install lodash)  ─┐
+Bash(npm install express) ─┼→ Recommend Bash(npm install *) for allow
+Bash(npm install chalk)   ─┘
+```
+
+Package managers and VCS commands (`npm`, `git`, `cargo`, `pip`, etc.) use 2-token prefixes (e.g., `npm install`); others use 1-token prefixes (e.g., `ls`).
+
+#### Auto-Apply
+
+After displaying recommendations, you can interactively apply them. Use `--yes` to skip confirmation:
+
+```bash
+csg recommend        # Show recommendations → "Apply? [Y/n]"
+csg recommend --yes  # Auto-apply without confirmation
+```
+
+When deny rules are added, the Layer 2 enforcement hook is automatically regenerated.
+
 ### MCP Server Integration
 
 Let Claude directly check and improve settings.
@@ -573,7 +622,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (16 files, 340 tests)
+npm test               # Run tests (19 files, 356 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
@@ -596,7 +645,10 @@ src/
 │   ├── pattern-validator.ts  # Pattern validation
 │   ├── pattern-migrator.ts   # Syntax & structure migration
 │   ├── hook-generator.ts     # Enforcement hook generation
+│   ├── hook-regenerator.ts   # Shared hook regeneration logic
 │   ├── hook-script-builder.ts # Shell script building
+│   ├── pattern-grouper.ts    # Command prefix grouping
+│   ├── recommendation-applier.ts # Auto-apply recommendations
 │   ├── session-hook.ts       # Session startup hook
 │   ├── telemetry-analyzer.ts # Telemetry analysis
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 framing

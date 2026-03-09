@@ -1,15 +1,13 @@
-import { writeFile, chmod } from 'node:fs/promises'
-import { join } from 'node:path'
 import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
-import { generateEnforceScript, mergeHookIntoSettings } from '../core/hook-generator.js'
-import { getGlobalSettingsPath, getHooksDir, ensureDir, expandHome } from '../utils/paths.js'
+import { getGlobalSettingsPath } from '../utils/paths.js'
+import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
 import { printHeader, printSuccess, printError } from '../utils/display.js'
 import { deploySlashCommands, printDeployResult } from './deploy-slash.js'
 import { isValidProfileName, getProfile } from '../profiles/index.js'
 import { applyProfileToSettings } from '../core/profile-applicator.js'
 import { installSessionHook } from '../core/session-hook.js'
-import type { ClaudeSettings, ProfileName } from '../types.js'
+import type { ProfileName } from '../types.js'
 
 export interface InitOptions {
   profile?: string
@@ -18,24 +16,6 @@ export interface InitOptions {
 
 function resolveProfile(profileOption?: string): ProfileName {
   return isValidProfileName(profileOption ?? '') ? (profileOption as ProfileName) : 'balanced'
-}
-
-async function setupEnforceHook(settings: ClaudeSettings): Promise<ClaudeSettings> {
-  const allDeny = [
-    ...(settings.permissions?.deny ?? []),
-    ...(settings.deny ?? []),
-  ]
-
-  const script = generateEnforceScript(allDeny)
-  const hooksDir = getHooksDir()
-  await ensureDir(hooksDir)
-  const hookPath = join(hooksDir, 'enforce-permissions.sh')
-  await writeFile(hookPath, script, 'utf-8')
-  await chmod(hookPath, 0o755)
-  printSuccess(`強制フックを生成: ${hookPath}`)
-
-  const expandedHookPath = expandHome('~/.claude/hooks/enforce-permissions.sh')
-  return mergeHookIntoSettings(settings, expandedHookPath)
 }
 
 export async function initCommand(options: InitOptions = {}): Promise<void> {
@@ -67,7 +47,12 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   if (applied.addedAsk > 0) process.stdout.write(`ask ルールを追加 (${applied.addedAsk}件)\n`)
 
   const withEnforce = profile.hooks.enforce
-    ? await setupEnforceHook(applied.settings)
+    ? await regenerateEnforceHook(applied.settings).then(result => {
+        if (result.rulesCount > 0) {
+          printSuccess(`強制フックを生成: ${result.hookPath}`)
+        }
+        return ensureHookRegistered(applied.settings)
+      })
     : applied.settings
 
   const withSession = profile.hooks.sessionDiagnose

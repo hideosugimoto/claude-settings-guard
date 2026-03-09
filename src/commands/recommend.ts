@@ -5,6 +5,11 @@ import {
   generateRecommendations,
 } from '../core/telemetry-analyzer.js'
 import { printHeader, printRecommendation, printSuccess } from '../utils/display.js'
+import { confirm } from '../utils/prompt.js'
+import { applyRecommendations } from '../core/recommendation-applier.js'
+import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
+import { writeSettings } from '../core/settings-writer.js'
+import { getGlobalSettingsPath } from '../utils/paths.js'
 import type { Recommendation } from '../types.js'
 
 export interface RecommendResult {
@@ -33,7 +38,7 @@ export async function runRecommend(): Promise<RecommendResult> {
   return { recommendations, eventCount: events.length }
 }
 
-export async function recommendCommand(): Promise<void> {
+export async function recommendCommand(options: { yes?: boolean } = {}): Promise<void> {
   printHeader('Claude Settings Guard - テレメトリ分析')
 
   const settings = await readGlobalSettings()
@@ -75,5 +80,46 @@ export async function recommendCommand(): Promise<void> {
     process.stdout.write('\n')
   }
 
-  process.stdout.write('推薦を適用するには設定を手動で更新してください。\n')
+  const autoYes = options.yes ?? false
+  const interactive = process.stdin.isTTY && process.stdout.isTTY
+  const shouldApply = autoYes || (interactive ? await confirm('推薦を適用しますか？') : false)
+
+  if (!shouldApply) {
+    return
+  }
+
+  const applied = applyRecommendations(settings, recommendations)
+  let nextSettings = applied.settings
+  let hookPath: string | undefined
+  let hookRulesCount = 0
+
+  if (applied.hasDenyChanges) {
+    const hookResult = await regenerateEnforceHook(nextSettings)
+    nextSettings = ensureHookRegistered(nextSettings)
+    hookPath = hookResult.hookPath
+    hookRulesCount = hookResult.rulesCount
+  }
+
+  const result = await writeSettings(getGlobalSettingsPath(), nextSettings)
+  if (!result.success) {
+    process.stdout.write(`設定の書き込みに失敗しました: ${result.error}\n`)
+    process.exit(1)
+  }
+
+  printSuccess('推薦を適用しました')
+  if (applied.addedAllow.length > 0) {
+    process.stdout.write(`  allow 追加 (${applied.addedAllow.length}件):\n`)
+    for (const pattern of applied.addedAllow) process.stdout.write(`    - ${pattern}\n`)
+  }
+  if (applied.addedDeny.length > 0) {
+    process.stdout.write(`  deny 追加 (${applied.addedDeny.length}件):\n`)
+    for (const pattern of applied.addedDeny) process.stdout.write(`    - ${pattern}\n`)
+  }
+  if (result.backupPath) {
+    process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
+  }
+  if (applied.hasDenyChanges) {
+    process.stdout.write(`  フック再生成: ${hookRulesCount > 0 ? '実行' : 'スキップ (denyルール0件)'}\n`)
+    if (hookPath && hookRulesCount > 0) process.stdout.write(`  フック: ${hookPath}\n`)
+  }
 }

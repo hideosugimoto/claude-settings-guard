@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { getTelemetryDir } from '../utils/paths.js'
 import { RECOMMEND_ALLOW_THRESHOLD, RECOMMEND_DENY_THRESHOLD } from '../constants.js'
 import type { TelemetryEvent, Recommendation } from '../types.js'
+import { groupStatsByPrefix } from './pattern-grouper.js'
 
-interface ToolStats {
+export interface ToolStats {
   readonly tool: string
   readonly pattern: string
   readonly allowed: number
@@ -126,31 +127,35 @@ export function generateRecommendations(
   const recommendations: Recommendation[] = []
   const allowSet = new Set(existingAllow)
   const denySet = new Set(existingDeny)
+  const grouped = groupStatsByPrefix(stats)
 
-  for (const [, stat] of stats) {
-    // Skip if already configured
-    if (allowSet.has(stat.pattern) || denySet.has(stat.pattern)) continue
+  for (const stat of grouped) {
+    if (allowSet.has(stat.wildcardPattern) || denySet.has(stat.wildcardPattern)) continue
 
-    if (stat.allowed >= RECOMMEND_ALLOW_THRESHOLD && stat.denied === 0) {
+    const groupedSuffix = stat.exactPatterns.length >= 3
+      ? ` (${stat.exactPatterns.length} subcommands grouped)`
+      : ''
+
+    if (stat.totalAllowed >= RECOMMEND_ALLOW_THRESHOLD && stat.totalDenied === 0) {
       recommendations.push({
         action: 'add-allow',
-        pattern: stat.pattern,
-        reason: `${stat.allowed} times allowed, never denied`,
+        pattern: stat.wildcardPattern,
+        reason: `${stat.totalAllowed} times allowed, never denied${groupedSuffix}`,
         stats: {
-          allowed: stat.allowed,
-          denied: stat.denied,
-          prompted: stat.prompted,
+          allowed: stat.totalAllowed,
+          denied: stat.totalDenied,
+          prompted: stat.totalPrompted,
         },
       })
-    } else if (stat.denied >= RECOMMEND_DENY_THRESHOLD && stat.allowed === 0) {
+    } else if (stat.totalDenied >= RECOMMEND_DENY_THRESHOLD && stat.totalAllowed === 0) {
       recommendations.push({
         action: 'add-deny',
-        pattern: stat.pattern,
-        reason: `${stat.denied} times denied, never allowed`,
+        pattern: stat.wildcardPattern,
+        reason: `${stat.totalDenied} times denied, never allowed${groupedSuffix}`,
         stats: {
-          allowed: stat.allowed,
-          denied: stat.denied,
-          prompted: stat.prompted,
+          allowed: stat.totalAllowed,
+          denied: stat.totalDenied,
+          prompted: stat.totalPrompted,
         },
       })
     }

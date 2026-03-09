@@ -1,10 +1,9 @@
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
-import { generateEnforceScript, mergeHookIntoSettings } from '../core/hook-generator.js'
+import { generateEnforceScript } from '../core/hook-generator.js'
 import { writeSettings } from '../core/settings-writer.js'
 import { printHeader, printSuccess, printError, printWarning } from '../utils/display.js'
-import { getGlobalSettingsPath, getHooksDir, ensureDir, expandHome } from '../utils/paths.js'
-import { writeFile, chmod } from 'node:fs/promises'
-import { join } from 'node:path'
+import { getGlobalSettingsPath } from '../utils/paths.js'
+import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
 import type { ClaudeSettings } from '../types.js'
 
 export interface EnforceResult {
@@ -28,23 +27,20 @@ export async function runEnforce(): Promise<EnforceResult | null> {
 }
 
 export async function applyEnforce(settings: ClaudeSettings): Promise<{ success: boolean; hookPath: string; backupPath?: string; error?: string }> {
-  const rules = extractAllRules(settings)
-  const allDeny = [...rules.denyRules, ...rules.legacyDeny]
-  const script = generateEnforceScript(allDeny)
-
-  const hooksDir = getHooksDir()
-  await ensureDir(hooksDir)
-  const hookPath = join(hooksDir, 'enforce-permissions.sh')
-  await writeFile(hookPath, script, 'utf-8')
-  await chmod(hookPath, 0o755)
-
-  const expandedHookPath = expandHome('~/.claude/hooks/enforce-permissions.sh')
-  const updatedSettings = mergeHookIntoSettings(settings, expandedHookPath)
+  const hookResult = await regenerateEnforceHook(settings)
+  const updatedSettings = hookResult.rulesCount > 0
+    ? ensureHookRegistered(settings)
+    : settings
 
   const settingsPath = getGlobalSettingsPath()
   const result = await writeSettings(settingsPath, updatedSettings)
 
-  return { success: result.success, hookPath, backupPath: result.backupPath, error: result.error }
+  return {
+    success: result.success,
+    hookPath: hookResult.hookPath,
+    backupPath: result.backupPath,
+    error: result.error,
+  }
 }
 
 export async function enforceCommand(options: { dryRun?: boolean }): Promise<void> {

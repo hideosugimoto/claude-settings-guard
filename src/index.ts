@@ -67,9 +67,10 @@ program
 program
   .command('recommend')
   .description('テレメトリデータを分析し、権限設定の推薦を行う')
-  .action(async () => {
+  .option('-y, --yes', '推薦を確認なしで適用する')
+  .action(async (opts) => {
     try {
-      await recommendCommand()
+      await recommendCommand({ yes: opts.yes })
     } catch (err) {
       process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
       process.exit(1)
