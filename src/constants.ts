@@ -31,6 +31,7 @@ export const DEFAULT_DENY_RULES: readonly string[] = [
   'Read(**/*.secret)', 'Read(**/*credential*)',
   'Write(**/.env)', 'Write(**/.env.*)', 'Write(**/secrets/**)',
   'Edit(**/.env)', 'Edit(**/.env.*)', 'Edit(**/secrets/**)',
+  'Grep(**/.env)', 'Grep(**/.env.*)', 'Grep(**/secrets/**)',
 ]
 
 export const LEGACY_COLON_PATTERN = /^(\w+)\((.+):(\*)\)$/
@@ -47,6 +48,22 @@ export const BACKUP_DIR = '~/.claude/backups'
 export const HOOKS_DIR = '~/.claude/hooks'
 export const COMMANDS_DIR = '~/.claude/commands'
 export const TELEMETRY_DIR = '~/.claude/telemetry'
+
+// Commands that can read file contents (bypass Read deny via Bash)
+export const FILE_READ_COMMANDS: ReadonlySet<string> = new Set([
+  'cat', 'head', 'tail', 'less', 'more', 'grep', 'sed', 'awk', 'strings',
+])
+
+// Commands that can write/copy files (bypass Write/Edit deny via Bash)
+export const FILE_WRITE_COMMANDS: ReadonlySet<string> = new Set([
+  'sed', 'tee', 'cp', 'mv',
+])
+
+// Commands that act as prefix wrappers (can wrap denied commands)
+export const PREFIX_COMMANDS: ReadonlySet<string> = new Set([
+  'env', 'command', 'nice', 'nohup', 'builtin', 'time',
+  'strace', 'ltrace', 'ionice', 'taskset', 'chrt',
+])
 
 export const RECOMMEND_ALLOW_THRESHOLD = 3
 export const RECOMMEND_DENY_THRESHOLD = 2

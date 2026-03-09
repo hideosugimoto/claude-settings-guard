@@ -4,7 +4,9 @@ import {
   groupRulesByTool,
   generateBashToolCheck,
   generateNonBashToolCheck,
+  generateBashFileArgCheck,
 } from './hook-script-builder.js'
+import type { DenyRule } from './hook-script-builder.js'
 
 function generateStripPrefixCommands(): string {
   const lines = [
@@ -122,12 +124,25 @@ export function generateEnforceScript(denyRules: readonly string[]): string {
   const hasBashRules = byTool.has('Bash')
   const toolChecks: string[] = []
 
+  // Collect file-path deny rules from non-Bash tools for cross-tool protection
+  const fileDenyTools = ['Read', 'Write', 'Edit', 'Grep'] as const
+  const fileDenyRules: DenyRule[] = []
+
   for (const [toolName, rules] of byTool) {
     if (toolName === 'Bash') {
       toolChecks.push(generateBashToolCheck(rules))
     } else {
       toolChecks.push(generateNonBashToolCheck(toolName, rules))
+      if ((fileDenyTools as readonly string[]).includes(toolName)) {
+        fileDenyRules.push(...rules)
+      }
     }
+  }
+
+  // Add cross-tool file argument check for Bash commands
+  const fileArgCheck = generateBashFileArgCheck(fileDenyRules)
+  if (fileArgCheck) {
+    toolChecks.push(fileArgCheck)
   }
 
   const helperFns = hasBashRules

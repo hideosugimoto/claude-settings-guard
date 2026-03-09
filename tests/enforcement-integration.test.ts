@@ -353,9 +353,14 @@ describe('CRITICAL: Non-Bash tool enforcement', () => {
       expect(r.code).toBe(0) // "sudo" in path should not trigger Bash sudo rule
     })
 
-    it('Read rules do NOT affect Bash tool', () => {
+    it('Read deny rules block Bash file access via cross-tool protection', () => {
       const r = executeHook(script, 'Bash', { command: 'cat .env' })
-      // "cat .env" is not "sudo" or "rm -rf /", so it should pass Bash checks
+      // Cross-tool file protection: "cat .env" matches Read(**/.env) deny pattern
+      expect(r.code).toBe(2)
+    })
+
+    it('Bash rules do NOT falsely trigger on non-denied file operations', () => {
+      const r = executeHook(script, 'Bash', { command: 'cat /app/src/index.ts' })
       expect(r.code).toBe(0)
     })
 

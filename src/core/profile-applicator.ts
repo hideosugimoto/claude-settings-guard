@@ -1,11 +1,13 @@
 import type { ClaudeSettings, Profile } from '../types.js'
-import { DEFAULT_DENY_RULES } from '../constants.js'
+import { DEFAULT_DENY_RULES, FILE_READ_COMMANDS, FILE_WRITE_COMMANDS } from '../constants.js'
 
 export interface ApplyProfileResult {
   readonly settings: ClaudeSettings
   readonly addedDeny: number
   readonly addedAllow: number
   readonly addedAsk: number
+  readonly conflicts?: readonly string[]
+  readonly crossToolConflicts?: readonly string[]
 }
 
 function findMissing(
@@ -13,6 +15,49 @@ function findMissing(
   desired: readonly string[],
 ): readonly string[] {
   return desired.filter(rule => !existing.includes(rule))
+}
+
+/**
+ * Detect patterns that appear in both allow and deny after merging.
+ */
+function detectConflicts(
+  allow: readonly string[],
+  deny: readonly string[],
+): readonly string[] {
+  const denySet = new Set(deny)
+  return allow.filter(rule => denySet.has(rule))
+}
+
+// Detect cross-tool conflicts: Bash allow rules that can bypass file deny rules.
+function detectCrossToolConflicts(
+  allow: readonly string[],
+  deny: readonly string[],
+): readonly string[] {
+  const hasReadDeny = deny.some(d => d.startsWith('Read(') || d.startsWith('Grep('))
+  const hasWriteDeny = deny.some(d => d.startsWith('Write('))
+  const hasEditDeny = deny.some(d => d.startsWith('Edit('))
+
+  if (!hasReadDeny && !hasWriteDeny && !hasEditDeny) return []
+
+  const conflicts: string[] = []
+
+  for (const rule of allow) {
+    const match = rule.match(/^Bash\((\S+)/)
+    if (!match) continue
+    const cmd = match[1].toLowerCase()
+
+    const bypasses: string[] = []
+    if (FILE_READ_COMMANDS.has(cmd) && hasReadDeny) bypasses.push('Read/Grep')
+    if (FILE_WRITE_COMMANDS.has(cmd) && hasWriteDeny) bypasses.push('Write')
+    if (FILE_WRITE_COMMANDS.has(cmd) && hasEditDeny) bypasses.push('Edit')
+    if (cmd === 'sed' && hasReadDeny && !bypasses.some(b => b.includes('Read'))) bypasses.push('Read/Grep')
+
+    if (bypasses.length > 0) {
+      conflicts.push(`Bash(${cmd} *) can bypass ${bypasses.join('/')} deny rules`)
+    }
+  }
+
+  return conflicts
 }
 
 export function applyProfileToSettings(
@@ -42,10 +87,24 @@ export function applyProfileToSettings(
       : {}),
   }
 
+  // Detect conflicts between final allow and deny lists
+  const conflicts = detectConflicts(
+    updatedPermissions.allow,
+    updatedPermissions.deny,
+  )
+
+  // Detect cross-tool conflicts (Bash commands that bypass file deny rules)
+  const crossToolConflicts = detectCrossToolConflicts(
+    updatedPermissions.allow,
+    updatedPermissions.deny,
+  )
+
   return {
     settings: { ...settings, permissions: updatedPermissions },
     addedDeny: missingDeny.length,
     addedAllow: missingAllow.length,
     addedAsk: missingAsk.length,
+    ...(conflicts.length > 0 ? { conflicts } : {}),
+    ...(crossToolConflicts.length > 0 ? { crossToolConflicts } : {}),
   }
 }

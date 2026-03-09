@@ -8,6 +8,10 @@ export const balancedProfile: Profile = {
     'Bash(rm -rf /*)',
     'Read(**/.env)',
     'Read(**/secrets/**)',
+    'Write(**/.env)',
+    'Write(**/secrets/**)',
+    'Edit(**/.env)',
+    'Edit(**/secrets/**)',
   ],
   allow: [
     'Read', 'Glob', 'Grep',

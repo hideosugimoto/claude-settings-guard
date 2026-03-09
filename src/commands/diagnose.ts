@@ -1,5 +1,5 @@
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
-import { validatePatterns, findConflicts, checkMissingPairedDenyRules } from '../core/pattern-validator.js'
+import { validatePatterns, findConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
 import type { DiagnosticIssue } from '../types.js'
 
@@ -42,6 +42,14 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
       [...rules.denyRules, ...rules.legacyDeny],
     ),
     ...checkMissingPairedDenyRules([...rules.denyRules, ...rules.legacyDeny]),
+    ...checkCrossToolBypasses(
+      [...rules.allowRules, ...rules.legacyAllowedTools],
+      [...rules.denyRules, ...rules.legacyDeny],
+    ),
+    ...checkPrefixBypasses(
+      [...rules.allowRules, ...rules.legacyAllowedTools],
+      [...rules.denyRules, ...rules.legacyDeny],
+    ),
   ]
 
   const severityOrder = { critical: 0, warning: 1, info: 2 }

@@ -1,7 +1,13 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getTelemetryDir } from '../utils/paths.js'
-import { RECOMMEND_ALLOW_THRESHOLD, RECOMMEND_DENY_THRESHOLD } from '../constants.js'
+import {
+  RECOMMEND_ALLOW_THRESHOLD,
+  RECOMMEND_DENY_THRESHOLD,
+  FILE_READ_COMMANDS,
+  FILE_WRITE_COMMANDS,
+  PREFIX_COMMANDS,
+} from '../constants.js'
 import type { TelemetryEvent, Recommendation } from '../types.js'
 import { groupStatsByPrefix } from './pattern-grouper.js'
 
@@ -138,6 +144,34 @@ export function getAnalysisPeriod(
   return { earliest: timestamps[0], latest: timestamps[timestamps.length - 1] }
 }
 
+
+/**
+ * Check if a Bash allow pattern would create a cross-tool bypass
+ * against existing deny rules.
+ */
+function wouldBypassDenyRules(
+  bashPattern: string,
+  existingDeny: readonly string[],
+): boolean {
+  const match = bashPattern.match(/^Bash\((\S+)/)
+  if (!match) return false
+  const cmd = match[1].toLowerCase()
+
+  const hasReadDeny = existingDeny.some(d => d.startsWith('Read(') || d.startsWith('Grep('))
+  const hasWriteDeny = existingDeny.some(d => d.startsWith('Write('))
+  const hasEditDeny = existingDeny.some(d => d.startsWith('Edit('))
+  const hasBashDeny = existingDeny.some(d => d.startsWith('Bash('))
+
+  // Cross-tool file bypass: read commands vs Read deny
+  if (FILE_READ_COMMANDS.has(cmd) && hasReadDeny) return true
+  // Cross-tool file bypass: write commands vs Write/Edit deny
+  if (FILE_WRITE_COMMANDS.has(cmd) && (hasWriteDeny || hasEditDeny)) return true
+  // Prefix bypass: prefix commands vs Bash deny
+  if (PREFIX_COMMANDS.has(cmd) && hasBashDeny) return true
+
+  return false
+}
+
 export function generateRecommendations(
   stats: ReadonlyMap<string, ToolStats>,
   existingAllow: readonly string[],
@@ -156,6 +190,9 @@ export function generateRecommendations(
       : ''
 
     if (stat.totalAllowed >= RECOMMEND_ALLOW_THRESHOLD && stat.totalDenied === 0) {
+      // C1: Skip allow recommendations that would bypass deny rules
+      if (wouldBypassDenyRules(stat.wildcardPattern, existingDeny)) continue
+
       recommendations.push({
         action: 'add-allow',
         pattern: stat.wildcardPattern,

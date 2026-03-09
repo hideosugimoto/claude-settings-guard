@@ -108,6 +108,68 @@ function generateSafeEnvExclusionLines(): string[] {
   ]
 }
 
+/**
+ * Generate bash code to check Bash command arguments against file deny patterns.
+ * This catches cross-tool bypasses (e.g. "cat .env" when Read deny exists).
+ */
+export function generateBashFileArgCheck(rules: readonly DenyRule[]): string {
+  if (rules.length === 0) return ''
+
+  const regexVars = rules.map((r, i) => `  re_filedeny_${i}='${r.regex}'`)
+  const conditions = rules.map((_r, i) =>
+    `          [[ "$arg_lower" =~ $re_filedeny_${i} ]]`
+  )
+
+  const safeSuffixes = SAFE_ENV_SUFFIXES.map(s => `"${s}"`).join(' ')
+
+  const lines = [
+    '# Cross-tool file protection: check Bash command arguments against file deny patterns',
+    'if [[ "$TOOL_NAME_LOWER" == "bash" ]]; then',
+    '  command_for_filecheck=$(printf \'%s\' "$input" | jq -r \'.tool_input.command // ""\')',
+    ...regexVars,
+    `  safe_env_suffixes_filecheck=(${safeSuffixes})`,
+    '  for arg in $command_for_filecheck; do',
+    '    # Strip surrounding quotes from argument',
+    "    arg=$(printf '%s' \"$arg\" | sed \"s/^[\\\"']//;s/[\\\"']$//\")",
+    '    arg_lower=$(printf \'%s\' "$arg" | tr \'[:upper:]\' \'[:lower:]\')',
+    '    # Check if argument looks like a file path (starts with / . or contains /)',
+    '    if [[ "$arg_lower" =~ ^[/\\.] ]] || [[ "$arg_lower" =~ / ]]; then',
+    '      # Normalize: prepend ./ for relative paths so deny regex patterns can match',
+    '      if [[ "$arg_lower" != /* ]]; then',
+    '        arg_lower="./$arg_lower"',
+    '      fi',
+    '      # Check safe env exclusion',
+    '      is_safe_env_filecheck=false',
+    '      for suffix in "${safe_env_suffixes_filecheck[@]}"; do',
+    '        if [[ "$arg_lower" == *".env.$suffix" ]]; then',
+    '          is_safe_env_filecheck=true',
+    '          break',
+    '        fi',
+    '      done',
+    '      if [ "$is_safe_env_filecheck" = false ]; then',
+    '        if',
+    conditions.join(' ||\n'),
+    '        then',
+    '          reason="BLOCKED by enforce-permissions: file deny rule matched in Bash argument (arg: $arg)"',
+    '          jq -n --arg reason "$reason" \'{',
+    '            hookSpecificOutput: {',
+    '              hookEventName: "PreToolUse",',
+    '              permissionDecision: "deny",',
+    '              permissionDecisionReason: $reason',
+    '            }',
+    '          }\'',
+    '          echo "$reason" >&2',
+    '          exit 2',
+    '        fi',
+    '      fi',
+    '    fi',
+    '  done',
+    'fi',
+  ]
+
+  return lines.join('\n')
+}
+
 export function generateBashToolCheck(rules: readonly DenyRule[]): string {
   const regexVars = rules.map((r, i) => `  re_bash_${i}='^${r.regex}'`)
   const conditions = rules.map((_r, i) =>
@@ -147,7 +209,7 @@ export function generateNonBashToolCheck(toolName: string, rules: readonly DenyR
     throw new Error(`Invalid tool name: ${toolName}`)
   }
   const toolPrefix = toolName.toLowerCase()
-  const usesFilePath = toolName === 'Read' || toolName === 'Write' || toolName === 'Edit'
+  const usesFilePath = toolName === 'Read' || toolName === 'Write' || toolName === 'Edit' || toolName === 'Grep'
 
   const regexVars = rules.map((r, i) =>
     `  re_${toolPrefix}_${i}='${r.regex}'`
@@ -158,8 +220,9 @@ export function generateNonBashToolCheck(toolName: string, rules: readonly DenyR
     `    [[ "$${varName}" =~ $re_${toolPrefix}_${i} ]]`
   )
 
+  const jqField = toolName === 'Grep' ? 'path' : 'file_path'
   const filePathExtraction = [
-    `  file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // ""')`,
+    `  file_path=$(printf '%s' "$input" | jq -r '.tool_input.${jqField} // ""')`,
     `  file_path=$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')`,
   ].join('\n')
 
@@ -183,6 +246,24 @@ export function generateNonBashToolCheck(toolName: string, rules: readonly DenyR
   lines.push('  then')
   lines.push(generateDenyResponse(toolName))
   lines.push('  fi')
+
+  // Grep: also check the glob parameter for deny pattern matches
+  if (toolName === 'Grep') {
+    const globConditions = rules.map((_r, i) =>
+      `    [[ "$grep_glob" =~ $re_${toolPrefix}_${i} ]]`
+    )
+    lines.push(`  # Also check Grep glob parameter`)
+    lines.push(`  grep_glob=$(printf '%s' "$input" | jq -r '.tool_input.glob // ""')`)
+    lines.push(`  grep_glob=$(printf '%s' "$grep_glob" | tr '[:upper:]' '[:lower:]')`)
+    lines.push(`  if [ -n "$grep_glob" ]; then`)
+    lines.push(`    if`)
+    lines.push(globConditions.join(' ||\n'))
+    lines.push(`    then`)
+    lines.push(generateDenyResponse(toolName))
+    lines.push(`    fi`)
+    lines.push(`  fi`)
+  }
+
   lines.push('fi')
 
   return lines.join('\n')

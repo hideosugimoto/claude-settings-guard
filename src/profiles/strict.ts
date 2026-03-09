@@ -11,6 +11,9 @@ export const strictProfile: Profile = {
     'Read(**/.env)',
     'Read(**/secrets/**)',
     'Write(**/.env)',
+    'Write(**/secrets/**)',
+    'Edit(**/.env)',
+    'Edit(**/secrets/**)',
   ],
   allow: [
     'Read', 'Glob', 'Grep',

@@ -243,9 +243,11 @@ describe('GAP 4: diagnose warns about missing paired deny rules', () => {
       'Read(**/.env)',
       'Edit(**/.env)',
       'Write(**/.env)',
+      'Grep(**/.env)',
       'Read(**/secrets/**)',
       'Edit(**/secrets/**)',
       'Write(**/secrets/**)',
+      'Grep(**/secrets/**)',
     ]
     const issues = checkMissingPairedDenyRules(denyRules)
 
