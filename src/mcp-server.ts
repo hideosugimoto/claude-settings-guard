@@ -1,12 +1,20 @@
-import { handleDiagnose, handleRecommend, handleEnforce, handleSetup, type McpToolResult } from './mcp/tools.js'
+import {
+  handleDiagnose,
+  handleRecommend,
+  handleAssessRisk,
+  handleEnforce,
+  handleSetup,
+  type McpToolResult,
+} from './mcp/tools.js'
 import { parseJsonRpcMessage, createJsonRpcFrame, MAX_MESSAGE_SIZE, type JsonRpcRequest } from './core/mcp-protocol.js'
 import { VERSION } from './version.js'
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<McpToolResult>
 
 const TOOL_HANDLERS: Readonly<Record<string, ToolHandler>> = {
-  csg_diagnose: () => handleDiagnose(),
-  csg_recommend: (args) => handleRecommend(args as { profile?: string }),
+  csg_diagnose: (args) => handleDiagnose(args),
+  csg_recommend: (args) => handleRecommend(args),
+  csg_assess_risk: (args) => handleAssessRisk(args),
   csg_enforce: (args) => handleEnforce(args as { dryRun?: boolean }),
   csg_setup: (args) => handleSetup(args as { profile?: string }),
 }
@@ -32,14 +40,27 @@ const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'csg_recommend',
-    description: 'プロファイルに基づく改善提案を返す',
+    description: 'Analyze telemetry and current settings, returning structured data with pattern grouping, project context, and recommendations for Claude to interpret.',
     inputSchema: {
       type: 'object',
       properties: {
-        profile: {
+        cwd: {
           type: 'string',
-          description: 'プロファイル名 (minimal, balanced, strict)',
-          enum: ['minimal', 'balanced', 'strict'],
+          description: 'Project directory path for project type detection',
+        },
+      },
+    },
+  },
+  {
+    name: 'csg_assess_risk',
+    description: 'Analyze deny rule bypass risks including pipe chains, subshells, and command substitution. Returns structured risk assessment with mitigation status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        denyRules: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Deny rules to analyze (reads from settings.json if omitted)',
         },
       },
     },

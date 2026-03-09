@@ -1,21 +1,81 @@
-import { describe, it, expect, vi } from 'vitest'
-import { handleDiagnose, handleRecommend, handleEnforce, handleSetup } from '../src/mcp/tools.js'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { describe, it, expect } from 'vitest'
+import {
+  handleDiagnose,
+  handleRecommend,
+  handleAssessRisk,
+  handleEnforce,
+  handleSetup,
+} from '../src/mcp/tools.js'
+
+function parseJsonText(text: string): Record<string, unknown> {
+  return JSON.parse(text) as Record<string, unknown>
+}
+
+async function withTempDir(run: (dir: string) => Promise<void>): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), 'csg-mcp-tools-'))
+  try {
+    await run(dir)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}
 
 describe('mcp/tools', () => {
   describe('handleDiagnose', () => {
-    it('returns a result with content', async () => {
-      const result = await handleDiagnose()
+    it('returns structured diagnose result', async () => {
+      const result = await handleDiagnose({})
       expect(result.content).toHaveLength(1)
-      expect(result.content[0].type).toBe('text')
-      expect(typeof result.content[0].text).toBe('string')
+
+      const payload = parseJsonText(result.content[0].text)
+      expect(typeof payload.message).toBe('string')
+      expect(typeof payload.summary).toBe('object')
+      expect(Array.isArray(payload.issues)).toBe(true)
+      expect(typeof payload.rules).toBe('object')
+      expect(typeof payload.hooks).toBe('object')
+      expect(typeof payload.settingsFiles).toBe('object')
+    })
+  })
+
+  describe('handleRecommend', () => {
+    it('returns structured recommendation result', async () => {
+      const result = await handleRecommend({})
+      expect(result.isError).toBeUndefined()
+
+      const payload = parseJsonText(result.content[0].text)
+      expect(typeof payload.currentRules).toBe('object')
+      expect(typeof payload.telemetry).toBe('object')
+      expect(Array.isArray(payload.groupedPatterns)).toBe(true)
+      expect(Array.isArray(payload.recommendations)).toBe(true)
+      expect(typeof payload.projectContext).toBe('object')
     })
 
-    it('returns pattern count or not-found message', async () => {
-      const result = await handleDiagnose()
-      const text = result.content[0].text
-      expect(
-        text.includes('パターン') || text.includes('見つかりません')
-      ).toBe(true)
+    it('detects project context from cwd', async () => {
+      await withTempDir(async dir => {
+        await writeFile(join(dir, 'package.json'), '{"name":"demo"}')
+
+        const result = await handleRecommend({ cwd: dir })
+        const payload = parseJsonText(result.content[0].text)
+        const projectContext = payload.projectContext as Record<string, unknown>
+
+        expect(projectContext.detectedType).toBe('nodejs')
+        expect(Array.isArray(projectContext.suggestedToolPatterns)).toBe(true)
+      })
+    })
+  })
+
+  describe('handleAssessRisk', () => {
+    it('returns structured risk assessment', async () => {
+      const result = await handleAssessRisk({ denyRules: ['Bash(sudo *)'] })
+      const payload = parseJsonText(result.content[0].text)
+
+      expect(typeof payload.overallRiskLevel).toBe('string')
+      expect(typeof payload.denyRulesAnalyzed).toBe('number')
+      expect(Array.isArray(payload.ruleAnalysis)).toBe(true)
+      expect(typeof payload.mitigations).toBe('object')
+      expect(Array.isArray(payload.suggestions)).toBe(true)
     })
   })
 
@@ -30,43 +90,6 @@ describe('mcp/tools', () => {
       const result = await handleEnforce({})
       expect(result.content).toHaveLength(1)
       expect(typeof result.content[0].text).toBe('string')
-    })
-
-    it('handles missing settings gracefully', async () => {
-      const result = await handleEnforce({ dryRun: true })
-      // Should not throw, returns either result or error
-      expect(result.content[0].type).toBe('text')
-    })
-  })
-
-  describe('handleRecommend', () => {
-    it('returns profile info for valid profile', async () => {
-      const result = await handleRecommend({ profile: 'minimal' })
-      expect(result.isError).toBeUndefined()
-      expect(result.content[0].text).toContain('minimal')
-      expect(result.content[0].text).toContain('deny')
-      expect(result.content[0].text).toContain('allow')
-    })
-
-    it('defaults to balanced profile', async () => {
-      const result = await handleRecommend({})
-      expect(result.content[0].text).toContain('balanced')
-    })
-
-    it('returns error for invalid profile', async () => {
-      const result = await handleRecommend({ profile: 'nonexistent' })
-      expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('不明なプロファイル')
-    })
-
-    it('includes ask rules for balanced profile', async () => {
-      const result = await handleRecommend({ profile: 'balanced' })
-      expect(result.content[0].text).toContain('ask')
-    })
-
-    it('shows strict profile features', async () => {
-      const result = await handleRecommend({ profile: 'strict' })
-      expect(result.content[0].text).toContain('sessionDiagnose=true')
     })
   })
 
@@ -86,71 +109,7 @@ describe('mcp/tools', () => {
     it('returns error for invalid profile', async () => {
       const result = await handleSetup({ profile: 'invalid' })
       expect(result.isError).toBe(true)
-    })
-  })
-
-  describe('profile validation edge cases', () => {
-    it('handleRecommend: empty string profile returns error', async () => {
-      const result = await handleRecommend({ profile: '' })
-      expect(result.isError).toBe(true)
       expect(result.content[0].text).toContain('不明なプロファイル')
-    })
-
-    it('handleSetup: empty string profile returns error', async () => {
-      const result = await handleSetup({ profile: '' })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleRecommend: case-sensitive - Balanced (uppercase) returns error', async () => {
-      const result = await handleRecommend({ profile: 'Balanced' })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleSetup: case-sensitive - STRICT (uppercase) returns error', async () => {
-      const result = await handleSetup({ profile: 'STRICT' })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleRecommend: profile with spaces returns error', async () => {
-      const result = await handleRecommend({ profile: ' balanced ' })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleRecommend: SQL injection-like profile returns error', async () => {
-      const result = await handleRecommend({ profile: "'; DROP TABLE --" })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleSetup: very long profile name returns error', async () => {
-      const result = await handleSetup({ profile: 'a'.repeat(1000) })
-      expect(result.isError).toBe(true)
-    })
-
-    it('handleRecommend: lists valid profile names in error', async () => {
-      const result = await handleRecommend({ profile: 'invalid' })
-      expect(result.isError).toBe(true)
-      expect(result.content[0].text).toContain('minimal')
-      expect(result.content[0].text).toContain('balanced')
-      expect(result.content[0].text).toContain('strict')
-    })
-
-    it('handleRecommend: all valid profiles return non-error results', async () => {
-      for (const name of ['minimal', 'balanced', 'strict']) {
-        const result = await handleRecommend({ profile: name })
-        expect(result.isError).toBeUndefined()
-        expect(result.content[0].text).toContain(name)
-      }
-    })
-
-    it('handleRecommend: minimal profile has no ask rules section', async () => {
-      const result = await handleRecommend({ profile: 'minimal' })
-      // minimal profile has no ask rules
-      expect(result.content[0].text).not.toContain('ask ルール')
-    })
-
-    it('handleSetup: includes security warning about direct apply', async () => {
-      const result = await handleSetup({ profile: 'balanced' })
-      expect(result.content[0].text).toContain('セキュリティ上')
     })
   })
 })

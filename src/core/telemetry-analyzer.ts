@@ -119,6 +119,20 @@ export function analyzePermissionEvents(
   return statsMap
 }
 
+export function getAnalysisPeriod(
+  events: readonly TelemetryEvent[]
+): { earliest: string; latest: string } | null {
+  if (events.length === 0) return null
+
+  const timestamps = events
+    .map(event => event.event_data.client_timestamp)
+    .filter((timestamp): timestamp is string => Boolean(timestamp))
+    .sort()
+
+  if (timestamps.length === 0) return null
+  return { earliest: timestamps[0], latest: timestamps[timestamps.length - 1] }
+}
+
 export function generateRecommendations(
   stats: ReadonlyMap<string, ToolStats>,
   existingAllow: readonly string[],

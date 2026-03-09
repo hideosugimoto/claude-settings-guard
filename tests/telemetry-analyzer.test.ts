@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   analyzePermissionEvents,
   generateRecommendations,
+  getAnalysisPeriod,
 } from '../src/core/telemetry-analyzer.js'
 import type { TelemetryEvent } from '../src/types.js'
 
@@ -153,5 +154,45 @@ describe('generateRecommendations', () => {
 
     const recs = generateRecommendations(stats, [], [])
     expect(recs).toHaveLength(0) // below threshold
+  })
+})
+
+describe('getAnalysisPeriod', () => {
+  it('returns null for empty events', () => {
+    expect(getAnalysisPeriod([])).toBeNull()
+  })
+
+  it('returns earliest and latest timestamps', () => {
+    const events: TelemetryEvent[] = [
+      {
+        event_type: 'ClaudeCodeInternalEvent',
+        event_data: {
+          event_name: 'tool_use_allowed',
+          client_timestamp: '2026-03-01T10:00:00.000Z',
+          additional_metadata: JSON.stringify({ tool_name: 'Bash', command: 'echo a' }),
+        },
+      },
+      {
+        event_type: 'ClaudeCodeInternalEvent',
+        event_data: {
+          event_name: 'tool_use_allowed',
+          client_timestamp: '2026-03-03T10:00:00.000Z',
+          additional_metadata: JSON.stringify({ tool_name: 'Bash', command: 'echo b' }),
+        },
+      },
+      {
+        event_type: 'ClaudeCodeInternalEvent',
+        event_data: {
+          event_name: 'tool_use_allowed',
+          client_timestamp: '2026-03-02T10:00:00.000Z',
+          additional_metadata: JSON.stringify({ tool_name: 'Bash', command: 'echo c' }),
+        },
+      },
+    ]
+
+    expect(getAnalysisPeriod(events)).toEqual({
+      earliest: '2026-03-01T10:00:00.000Z',
+      latest: '2026-03-03T10:00:00.000Z',
+    })
   })
 })
