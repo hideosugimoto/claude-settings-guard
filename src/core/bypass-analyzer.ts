@@ -52,7 +52,7 @@ interface TechniqueMeta {
   readonly severity: 'low' | 'medium' | 'high' | 'critical'
 }
 
-const HOOKED_TECHNIQUES: readonly BypassTechnique[] = [
+const HOOKED_TECHNIQUES: ReadonlySet<BypassTechnique> = new Set<BypassTechnique>([
   'pipe_chain',
   'semicolon_chain',
   'and_chain',
@@ -61,7 +61,7 @@ const HOOKED_TECHNIQUES: readonly BypassTechnique[] = [
   'process_substitution',
   'subshell',
   'brace_group',
-]
+])
 
 const UNHOOKED_TECHNIQUES: readonly BypassTechnique[] = [
   'env_variable_expansion',
@@ -94,7 +94,7 @@ function extractCommandFromRule(rule: string): string {
   const command = match?.[1]?.trim() ?? ''
   if (!command) return 'sh -c "echo blocked"'
 
-  return command.includes('*') ? command.replace(/\*/g, 'rm -rf /').replace(/\s+/g, ' ').trim() : command
+  return command.includes('*') ? command.replace(/\*/g, 'dangerous-cmd').replace(/\s+/g, ' ').trim() : command
 }
 
 function toEnvExpansionExample(command: string): string {
@@ -208,7 +208,7 @@ export function analyzeBypassRisks(
   const ruleAnalysis: RuleAnalysis[] = bashRules.map(rule => {
     const command = extractCommandFromRule(rule)
     const bypasses: BypassRisk[] = ALL_TECHNIQUES.map(meta => {
-      const mitigatedByHook = enforceHookInstalled && HOOKED_TECHNIQUES.includes(meta.technique)
+      const mitigatedByHook = enforceHookInstalled && HOOKED_TECHNIQUES.has(meta.technique)
       return {
         technique: meta.technique,
         description: meta.description,
@@ -228,12 +228,10 @@ export function analyzeBypassRisks(
   const hasBashDenyRules = bashRules.length > 0
   const unhooked = hasUnhookedRisks(ruleAnalysis)
 
-  let overallRiskLevel: RiskLevel = 'low'
-  if (!enforceHookInstalled && hasBashDenyRules) {
-    overallRiskLevel = 'critical'
-  } else if (enforceHookInstalled && unhooked) {
-    overallRiskLevel = 'medium'
-  }
+  const overallRiskLevel: RiskLevel =
+    !enforceHookInstalled && hasBashDenyRules ? 'critical'
+    : enforceHookInstalled && unhooked ? 'medium'
+    : 'low'
 
   return {
     overallRiskLevel,
@@ -242,7 +240,7 @@ export function analyzeBypassRisks(
     mitigations: {
       layer2HookInstalled: enforceHookInstalled,
       splitSubcommandsEnabled: enforceHookInstalled,
-      hookedTechniques: HOOKED_TECHNIQUES,
+      hookedTechniques: [...HOOKED_TECHNIQUES],
       unhookedTechniques: UNHOOKED_TECHNIQUES,
     },
     suggestions: createSuggestions(hasBashDenyRules, enforceHookInstalled, unhooked),

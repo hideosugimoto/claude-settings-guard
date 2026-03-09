@@ -68,7 +68,12 @@ export async function loadTelemetryEvents(): Promise<readonly TelemetryEvent[]> 
         if (!line.trim()) continue
         try {
           const parsed = JSON.parse(line)
-          if (parsed.event_type && parsed.event_data) {
+          if (
+            parsed.event_type &&
+            parsed.event_data &&
+            typeof parsed.event_data.event_name === 'string' &&
+            typeof parsed.event_data.client_timestamp === 'string'
+          ) {
             events.push(parsed as TelemetryEvent)
           }
         } catch {

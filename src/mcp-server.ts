@@ -15,8 +15,8 @@ const TOOL_HANDLERS: Readonly<Record<string, ToolHandler>> = {
   csg_diagnose: (args) => handleDiagnose(args),
   csg_recommend: (args) => handleRecommend(args),
   csg_assess_risk: (args) => handleAssessRisk(args),
-  csg_enforce: (args) => handleEnforce(args as { dryRun?: boolean }),
-  csg_setup: (args) => handleSetup(args as { profile?: string }),
+  csg_enforce: (args) => handleEnforce(args),
+  csg_setup: (args) => handleSetup(args),
 }
 
 interface McpToolDefinition {
@@ -32,7 +32,7 @@ interface McpToolDefinition {
 const TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'csg_diagnose',
-    description: '現在の Claude Code settings.json を診断し、問題を検出して返す',
+    description: 'Diagnose the current Claude Code settings.json and return detected issues.',
     inputSchema: {
       type: 'object',
       properties: {},
@@ -67,26 +67,26 @@ const TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: 'csg_enforce',
-    description: 'Layer 2 強制フックを生成・プレビュー (dry-run対応)',
+    description: 'Generate or preview the Layer 2 enforcement hook (supports dry-run).',
     inputSchema: {
       type: 'object',
       properties: {
         dryRun: {
           type: 'boolean',
-          description: 'true の場合は生成内容のみ表示し、ファイルは作成しない',
+          description: 'When true, only preview the generated content without creating files.',
         },
       },
     },
   },
   {
     name: 'csg_setup',
-    description: 'プロファイルの適用案内を返す (セキュリティ上、直接適用は無効)',
+    description: 'Return setup instructions for a given profile (direct application is disabled for security).',
     inputSchema: {
       type: 'object',
       properties: {
         profile: {
           type: 'string',
-          description: 'プロファイル名 (minimal, balanced, strict)',
+          description: 'Profile name (minimal, balanced, strict).',
           enum: ['minimal', 'balanced', 'strict'],
         },
       },

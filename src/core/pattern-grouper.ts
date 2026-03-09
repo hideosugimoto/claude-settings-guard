@@ -9,6 +9,8 @@ export interface GroupedStats {
   readonly totalPrompted: number
 }
 
+const MIN_GROUP_SIZE = 3
+
 const TWO_TOKEN_COMMANDS = new Set([
   'npm', 'yarn', 'pnpm', 'cargo', 'pip', 'gem', 'go', 'git', 'apt',
 ])
@@ -57,8 +59,10 @@ export function groupStatsByPrefix(
 
   const grouped: GroupedStats[] = []
   for (const [key, entries] of prefixGroups) {
-    const [tool, prefix] = key.split('::')
-    if (entries.length >= 3) {
+    const sepIndex = key.indexOf('::')
+    const tool = key.slice(0, sepIndex)
+    const prefix = key.slice(sepIndex + 2)
+    if (entries.length >= MIN_GROUP_SIZE) {
       grouped.push({
         tool,
         wildcardPattern: formatWildcardPattern(tool, prefix),

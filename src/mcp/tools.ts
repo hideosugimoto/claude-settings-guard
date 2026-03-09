@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
+import { isAbsolute } from 'node:path'
 import { runDiagnose, type DiagnoseResult } from '../commands/diagnose.js'
 import { runEnforce, type EnforceResult } from '../commands/enforce.js'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
@@ -29,6 +30,22 @@ function textResult(text: string, isError = false): McpToolResult {
 
 function toJsonResult(value: unknown, isError = false): McpToolResult {
   return textResult(JSON.stringify(value, null, 2), isError)
+}
+
+const MAX_DENY_RULES = 100
+
+function sanitizeCwd(args: Record<string, unknown>): string | McpToolResult {
+  const raw = args.cwd
+  if (raw === undefined || raw === null) return process.cwd()
+  if (typeof raw !== 'string') return textResult('Invalid cwd: must be a string', true)
+  if (!isAbsolute(raw)) return textResult('Invalid cwd: must be an absolute path', true)
+  try {
+    const stat = statSync(raw)
+    if (!stat.isDirectory()) return textResult('Invalid cwd: path is not a directory', true)
+  } catch {
+    return textResult('Invalid cwd: path does not exist', true)
+  }
+  return raw
 }
 
 function getRulesFromSettings(settings: ClaudeSettings | null): {
@@ -89,11 +106,14 @@ function checkSessionDiagnoseHookInstalled(settings: ClaudeSettings | null): boo
 }
 
 export async function handleDiagnose(args: Record<string, unknown> = {}): Promise<McpToolResult> {
+  const cwdResult = sanitizeCwd(args)
+  if (typeof cwdResult !== 'string') return cwdResult
+
   const result: DiagnoseResult = await runDiagnose()
   const settings = await readGlobalSettings()
   const rules = getRulesFromSettings(settings)
 
-  const cwd = typeof args.cwd === 'string' ? args.cwd : process.cwd()
+  const cwd = cwdResult
   const globalSettingsPath = getGlobalSettingsPath()
   const localSettingsPath = getLocalSettingsPath()
   const projectSettingsPath = getProjectSettingsPath(cwd)
@@ -155,7 +175,9 @@ export async function handleRecommend(args: Record<string, unknown>): Promise<Mc
   const grouped = groupStatsByPrefix(stats)
   const recommendations = generateRecommendations(stats, allAllow, allDeny)
 
-  const cwd = typeof args.cwd === 'string' ? args.cwd : process.cwd()
+  const cwdResult = sanitizeCwd(args)
+  if (typeof cwdResult !== 'string') return cwdResult
+  const cwd = cwdResult
   const projectContext = await detectProject(cwd)
 
   const toolStats = [...stats.values()]
@@ -189,18 +211,19 @@ export async function handleRecommend(args: Record<string, unknown>): Promise<Mc
 
 export async function handleAssessRisk(args: Record<string, unknown>): Promise<McpToolResult> {
   const denyRules = Array.isArray(args.denyRules)
-    ? args.denyRules.filter((rule): rule is string => typeof rule === 'string')
+    ? args.denyRules.filter((rule): rule is string => typeof rule === 'string').slice(0, MAX_DENY_RULES)
     : null
 
   const settings = await readGlobalSettings()
   const rules = getRulesFromSettings(settings)
-  const effectiveRules = denyRules ?? [...rules.denyRules, ...rules.legacyDeny]
+  const effectiveRules = denyRules ?? [...rules.denyRules, ...rules.legacyDeny].slice(0, MAX_DENY_RULES)
 
   const assessment = analyzeBypassRisks(effectiveRules, checkEnforceHookInstalled(settings))
   return toJsonResult(assessment)
 }
 
-export async function handleEnforce(args: { dryRun?: boolean }): Promise<McpToolResult> {
+export async function handleEnforce(args: Record<string, unknown>): Promise<McpToolResult> {
+  const dryRun = typeof args.dryRun === 'boolean' ? args.dryRun : false
   const result: EnforceResult | null = await runEnforce()
 
   if (!result) {
@@ -211,7 +234,7 @@ export async function handleEnforce(args: { dryRun?: boolean }): Promise<McpTool
     return textResult('deny ルールがないため、フック生成をスキップしました')
   }
 
-  if (args.dryRun) {
+  if (dryRun) {
     const lines = [
       `deny ルール (${result.denyRules.length}件):`,
       ...result.denyRules.map(r => `  - ${r}`),
@@ -228,8 +251,8 @@ export async function handleEnforce(args: { dryRun?: boolean }): Promise<McpTool
   )
 }
 
-export async function handleSetup(args: { profile?: string }): Promise<McpToolResult> {
-  const profileName = args.profile ?? 'balanced'
+export async function handleSetup(args: Record<string, unknown>): Promise<McpToolResult> {
+  const profileName = typeof args.profile === 'string' ? args.profile : 'balanced'
 
   if (!isValidProfileName(profileName)) {
     return textResult(

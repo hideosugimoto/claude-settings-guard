@@ -89,16 +89,21 @@ export async function recommendCommand(options: { yes?: boolean } = {}): Promise
   }
 
   const applied = applyRecommendations(settings, recommendations)
-  let nextSettings = applied.settings
-  let hookPath: string | undefined
-  let hookRulesCount = 0
 
-  if (applied.hasDenyChanges) {
-    const hookResult = await regenerateEnforceHook(nextSettings)
-    nextSettings = ensureHookRegistered(nextSettings)
-    hookPath = hookResult.hookPath
-    hookRulesCount = hookResult.rulesCount
-  }
+  const hookInfo = applied.hasDenyChanges
+    ? await (async () => {
+        const hookResult = await regenerateEnforceHook(applied.settings)
+        return {
+          settings: ensureHookRegistered(applied.settings),
+          hookPath: hookResult.hookPath,
+          hookRulesCount: hookResult.rulesCount,
+        }
+      })()
+    : { settings: applied.settings, hookPath: undefined, hookRulesCount: 0 }
+
+  const nextSettings = hookInfo.settings
+  const hookPath = hookInfo.hookPath
+  const hookRulesCount = hookInfo.hookRulesCount
 
   const result = await writeSettings(getGlobalSettingsPath(), nextSettings)
   if (!result.success) {
