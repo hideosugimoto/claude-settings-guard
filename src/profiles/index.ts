@@ -25,13 +25,19 @@ export function isValidProfileName(name: string): name is ProfileName {
 /**
  * Collect all deny rules from every profile plus DEFAULT_DENY_RULES.
  * Used to identify which deny rules are "profile-managed" vs user-added custom rules.
+ * Uses lazy singleton cache to avoid creating a new Set on every call.
  */
+let _cachedAllProfileDenyRules: ReadonlySet<string> | undefined
+
 export function getAllProfileDenyRules(): ReadonlySet<string> {
-  const allRules = new Set<string>(DEFAULT_DENY_RULES)
-  for (const profile of Object.values(profiles)) {
-    for (const rule of profile.deny) {
-      allRules.add(rule)
+  if (!_cachedAllProfileDenyRules) {
+    const allRules = new Set<string>(DEFAULT_DENY_RULES)
+    for (const profile of Object.values(profiles)) {
+      for (const rule of profile.deny) {
+        allRules.add(rule)
+      }
     }
+    _cachedAllProfileDenyRules = allRules
   }
-  return allRules
+  return _cachedAllProfileDenyRules
 }

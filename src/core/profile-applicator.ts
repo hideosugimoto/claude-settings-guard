@@ -63,40 +63,27 @@ function detectCrossToolConflicts(
   return conflicts
 }
 
-export function applyProfileToSettings(
-  settings: ClaudeSettings,
+function buildFinalAskList(
+  existingAsk: readonly string[],
+  missingAsk: readonly string[],
   profile: Profile,
-): ApplyProfileResult {
-  const existingDeny = [
-    ...(settings.permissions?.deny ?? []),
-    ...(settings.deny ?? []),
-  ]
-
-  const allDesiredDeny = [...new Set([...DEFAULT_DENY_RULES, ...profile.deny])]
-  const missingDeny = findMissing(existingDeny, allDesiredDeny)
-
-  const existingAllow = settings.permissions?.allow ?? []
-  const missingAllow = findMissing(existingAllow, [...profile.allow])
-
-  const existingAsk = settings.permissions?.ask ?? []
-  const missingAsk = profile.ask ? findMissing(existingAsk, [...profile.ask]) : []
-
-  // Build final ask list first, so we can remove conflicts from allow.
-  // When switching profiles, remove ask entries that the new profile wants in allow.
-  // e.g., balanced puts Edit/Write in ask, but minimal wants them in allow.
+): { readonly finalAsk: readonly string[]; readonly removedFromAsk: readonly string[] } {
   const profileAllowSet = new Set(profile.allow)
   const mergedAsk = profile.ask
     ? [...new Set([...existingAsk, ...missingAsk, ...(profile.ask ?? [])])]
     : [...existingAsk]
   const finalAsk = mergedAsk.filter(rule => !profileAllowSet.has(rule))
   const removedFromAsk = mergedAsk.filter(rule => profileAllowSet.has(rule))
+  return { finalAsk, removedFromAsk }
+}
 
-  // Build final deny list, then clean up stale deny entries from previous profiles.
-  // Keep only: rules in new profile's deny + DEFAULT_DENY_RULES + user-added rules not from any profile.
-  // Strategy: remove deny rules that belong to OTHER profiles but not the current one.
+function buildFinalDenyList(
+  settings: ClaudeSettings,
+  missingDeny: readonly string[],
+  profile: Profile,
+): { readonly finalDeny: readonly string[]; readonly removedFromDeny: readonly string[] } {
   const mergedDeny = [...new Set([...(settings.permissions?.deny ?? []), ...missingDeny])]
   const profileDenySet = new Set([...DEFAULT_DENY_RULES, ...profile.deny])
-  // Also keep rules not from any known profile deny set (user-added custom rules)
   const allProfileDenyRules = getAllProfileDenyRules()
   const finalDeny = mergedDeny.filter(rule =>
     profileDenySet.has(rule) || !allProfileDenyRules.has(rule)
@@ -104,9 +91,19 @@ export function applyProfileToSettings(
   const removedFromDeny = mergedDeny.filter(rule =>
     !profileDenySet.has(rule) && allProfileDenyRules.has(rule)
   )
+  return { finalDeny, removedFromDeny }
+}
+
+function buildFinalAllowList(
+  existingAllow: readonly string[],
+  missingAllow: readonly string[],
+  askSet: ReadonlySet<string>,
+  denySet: ReadonlySet<string>,
+  profile: Profile,
+): { readonly cleanedAllow: readonly string[]; readonly removedFromAllow: number } {
+  const finalAsk = [...askSet]
 
   // Find bare tool names that would override specific ask patterns
-  // e.g., bare "Bash" in allow overrides "Bash(git push *)" in ask
   const bareToolsOverridingAsk = new Set(
     finalAsk.length > 0
       ? [...new Set(
@@ -121,19 +118,13 @@ export function applyProfileToSettings(
       : []
   )
 
-  // Sets for filtering
-  const askSet = new Set(finalAsk)
-  const denySet = new Set(finalDeny)
-
   // Compensate: when bare "Bash" is removed, add safe Bash patterns
   const compensateRules = bareToolsOverridingAsk.has('Bash')
     ? SAFE_BASH_ALLOW_RULES.filter(rule => !askSet.has(rule) && !denySet.has(rule))
     : []
 
-  // Build a function to check if an allow rule is a broad pattern that
-  // could override a more specific ask or deny rule.
-  // e.g., "Bash(npm *)" in allow overrides "Bash(npm publish *)" in ask
-  // e.g., "Bash(chmod *)" in allow overrides "Bash(chmod 777 *)" in deny
+  // Check if an allow rule is a broad pattern that could override
+  // a more specific ask or deny rule.
   const isBroadPatternOverridingAskOrDeny = (rule: string): boolean => {
     const match = rule.match(/^(\w+)\((.+)\s\*\)$/)
     if (!match) return false
@@ -144,8 +135,6 @@ export function applyProfileToSettings(
     )
   }
 
-  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask,
-  // or are broad patterns that could override more specific ask/deny rules
   const mergedAllow = [...existingAllow, ...missingAllow, ...compensateRules]
   const cleanedAllow = [...new Set(mergedAllow)].filter(rule =>
     !askSet.has(rule) &&
@@ -155,7 +144,36 @@ export function applyProfileToSettings(
   )
   const removedFromAllow = mergedAllow.length - cleanedAllow.length
 
-  // Destructure to separate ask from the rest, so stale ask doesn't persist
+  return { cleanedAllow, removedFromAllow }
+}
+
+export function applyProfileToSettings(
+  settings: ClaudeSettings,
+  profile: Profile,
+): ApplyProfileResult {
+  const existingDeny = [
+    ...(settings.permissions?.deny ?? []),
+    ...(settings.deny ?? []),
+  ]
+  const allDesiredDeny = [...new Set([...DEFAULT_DENY_RULES, ...profile.deny])]
+  const missingDeny = findMissing(existingDeny, allDesiredDeny)
+
+  const existingAllow = settings.permissions?.allow ?? []
+  const missingAllow = findMissing(existingAllow, [...profile.allow])
+
+  const existingAsk = settings.permissions?.ask ?? []
+  const missingAsk = profile.ask ? findMissing(existingAsk, [...profile.ask]) : []
+
+  const { finalAsk, removedFromAsk } = buildFinalAskList(existingAsk, missingAsk, profile)
+  const { finalDeny, removedFromDeny } = buildFinalDenyList(settings, missingDeny, profile)
+
+  const askSet = new Set(finalAsk)
+  const denySet = new Set(finalDeny)
+
+  const { cleanedAllow, removedFromAllow } = buildFinalAllowList(
+    existingAllow, missingAllow, askSet, denySet, profile,
+  )
+
   const { ask: _existingAskProp, ...permissionsWithoutAsk } = settings.permissions ?? {}
   const updatedPermissions = {
     ...permissionsWithoutAsk,
@@ -164,17 +182,8 @@ export function applyProfileToSettings(
     ...(finalAsk.length > 0 ? { ask: finalAsk } : {}),
   }
 
-  // Detect conflicts between final allow and deny lists
-  const conflicts = detectConflicts(
-    updatedPermissions.allow,
-    updatedPermissions.deny,
-  )
-
-  // Detect cross-tool conflicts (Bash commands that bypass file deny rules)
-  const crossToolConflicts = detectCrossToolConflicts(
-    updatedPermissions.allow,
-    updatedPermissions.deny,
-  )
+  const conflicts = detectConflicts(updatedPermissions.allow, updatedPermissions.deny)
+  const crossToolConflicts = detectCrossToolConflicts(updatedPermissions.allow, updatedPermissions.deny)
 
   return {
     settings: { ...settings, permissions: updatedPermissions },

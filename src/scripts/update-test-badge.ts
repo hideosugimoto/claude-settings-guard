@@ -1,24 +1,22 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
-import { resolve } from "node:path";
-
-const BADGE_PATTERN = /tests-\d+%20passed/g;
+import { readFileSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 /**
  * Parse vitest JSON reporter output and extract the number of passed tests.
  * Handles cases where the JSON is surrounded by extra output lines.
  */
 export function parseTestCount(output: string): number {
-  const lines = output.trim().split("\n");
+  const lines = output.trim().split('\n');
   let parsed: { numPassedTests?: number } | undefined;
 
   for (const line of lines) {
     try {
       const candidate = JSON.parse(line.trim());
       if (
-        typeof candidate === "object" &&
+        typeof candidate === 'object' &&
         candidate !== null &&
-        "numPassedTests" in candidate
+        'numPassedTests' in candidate
       ) {
         parsed = candidate;
         break;
@@ -33,9 +31,9 @@ export function parseTestCount(output: string): number {
     try {
       const candidate = JSON.parse(output.trim());
       if (
-        typeof candidate === "object" &&
+        typeof candidate === 'object' &&
         candidate !== null &&
-        "numPassedTests" in candidate
+        'numPassedTests' in candidate
       ) {
         parsed = candidate;
       }
@@ -44,9 +42,9 @@ export function parseTestCount(output: string): number {
     }
   }
 
-  if (!parsed || typeof parsed.numPassedTests !== "number") {
+  if (!parsed || typeof parsed.numPassedTests !== 'number') {
     throw new Error(
-      "Failed to parse test results: numPassedTests not found in JSON output"
+      'Failed to parse test results: numPassedTests not found in JSON output'
     );
   }
 
@@ -74,35 +72,34 @@ export function buildBadgeText(count: number): string {
  * Returns the updated content string.
  */
 export function replaceBadge(content: string, count: number): string {
-  if (!BADGE_PATTERN.test(content)) {
-    throw new Error("No test badge pattern found in content");
+  const badgePattern = /tests-\d+%20passed/
+
+  if (!badgePattern.test(content)) {
+    throw new Error('No test badge pattern found in content')
   }
 
-  // Reset lastIndex since we used .test() with a global regex
-  BADGE_PATTERN.lastIndex = 0;
-
-  const newBadge = buildBadgeText(count);
-  return content.replace(BADGE_PATTERN, newBadge);
+  const newBadge = buildBadgeText(count)
+  return content.replace(/tests-\d+%20passed/g, newBadge)
 }
 
 /**
  * Main entry point: run vitest, parse results, update README.md badge.
  */
 async function main(): Promise<void> {
-  const projectRoot = resolve(import.meta.dirname, "..", "..");
-  const readmePath = resolve(projectRoot, "README.md");
+  const projectRoot = resolve(import.meta.dirname, '..', '..');
+  const readmePath = resolve(projectRoot, 'README.md');
 
   // Run vitest with JSON reporter
   let output: string;
   try {
-    output = execSync("npx vitest run --reporter=json", {
+    output = execSync('npx vitest run --reporter=json', {
       cwd: projectRoot,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
   } catch (error: unknown) {
     // vitest exits with non-zero when tests fail, but still produces JSON
-    if (error && typeof error === "object" && "stdout" in error) {
+    if (error && typeof error === 'object' && 'stdout' in error) {
       output = (error as { stdout: string }).stdout;
     } else {
       throw new Error(`Failed to run vitest: ${error}`);
@@ -111,26 +108,24 @@ async function main(): Promise<void> {
 
   const passedCount = parseTestCount(output);
 
-  const readmeContent = readFileSync(readmePath, "utf-8");
+  const readmeContent = readFileSync(readmePath, 'utf-8');
   const updatedContent = replaceBadge(readmeContent, passedCount);
 
   if (updatedContent === readmeContent) {
-    console.log(`Badge is already up to date (${passedCount} passed).`);
+    process.stdout.write(`Badge is already up to date (${passedCount} passed).\n`);
     return;
   }
 
-  writeFileSync(readmePath, updatedContent, "utf-8");
-  console.log(`Updated badge: ${passedCount} passed.`);
+  writeFileSync(readmePath, updatedContent, 'utf-8');
+  process.stdout.write(`Updated badge: ${passedCount} passed.\n`);
 }
 
 // Run main only when executed directly (not imported in tests)
-const isDirectRun =
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith("update-test-badge.ts");
+const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
 
 if (isDirectRun) {
   main().catch((error) => {
-    console.error(error);
+    process.stderr.write(`${error}\n`);
     process.exit(1);
   });
 }

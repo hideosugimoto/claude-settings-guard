@@ -153,6 +153,12 @@ describe('profiles', () => {
       expect(allRules.has('Bash(some-random-command *)')).toBe(false)
     })
 
+    it('returns the same reference on consecutive calls (singleton cache)', () => {
+      const first = getAllProfileDenyRules()
+      const second = getAllProfileDenyRules()
+      expect(first).toBe(second)
+    })
+
     it('contains the union of all profile deny rules plus DEFAULT_DENY_RULES', () => {
       const allRules = getAllProfileDenyRules()
 

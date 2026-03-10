@@ -161,7 +161,8 @@ export async function setupCommand(options: { yes?: boolean; profile?: string })
   let preferredProfile: ProfileName | undefined
   if (options.profile !== undefined) {
     if (!isValidProfileName(options.profile)) {
-      throw new Error(`Invalid profile: '${options.profile}'. Valid profiles: ${getProfileNames().join(', ')}`)
+      const safeProfile = options.profile.slice(0, 50)
+      throw new Error(`Invalid profile: '${safeProfile}'. Valid profiles: ${getProfileNames().join(', ')}`)
     }
     preferredProfile = options.profile
   }

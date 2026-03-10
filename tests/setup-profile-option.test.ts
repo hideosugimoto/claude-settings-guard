@@ -121,5 +121,23 @@ describe('setupCommand --profile option', () => {
         setupCommand({ yes: true, profile: '' })
       ).rejects.toThrow(/invalid.*profile/i)
     })
+
+    it('truncates long profile names in the error message to 50 chars', async () => {
+      const longName = 'a'.repeat(100)
+      const truncated = 'a'.repeat(50)
+
+      let thrownError: Error | undefined
+      try {
+        await setupCommand({ yes: true, profile: longName })
+      } catch (error) {
+        thrownError = error as Error
+      }
+
+      expect(thrownError).toBeDefined()
+      // The error message should contain the truncated name (50 chars)
+      expect(thrownError!.message).toContain(truncated)
+      // The error message should NOT contain the full 100-char name
+      expect(thrownError!.message).not.toContain(longName)
+    })
   })
 })
