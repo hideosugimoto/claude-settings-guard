@@ -45,6 +45,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   }
   if (applied.addedAllow > 0) process.stdout.write(`allow ルールを追加 (${applied.addedAllow}件)\n`)
   if (applied.addedAsk > 0) process.stdout.write(`ask ルールを追加 (${applied.addedAsk}件)\n`)
+  if (applied.removedFromAllow > 0) process.stdout.write(`allow 競合を解消: deny/ask と重複する ${applied.removedFromAllow}件を allow から除去\n`)
 
   const withEnforce = profile.hooks.enforce
     ? await regenerateEnforceHook(applied.settings).then(result => {

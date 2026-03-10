@@ -6,6 +6,7 @@ export interface ApplyProfileResult {
   readonly addedDeny: number
   readonly addedAllow: number
   readonly addedAsk: number
+  readonly removedFromAllow: number
   readonly conflicts?: readonly string[]
   readonly crossToolConflicts?: readonly string[]
 }
@@ -77,13 +78,26 @@ export function applyProfileToSettings(
   const existingAsk = settings.permissions?.ask ?? []
   const missingAsk = profile.ask ? findMissing(existingAsk, [...profile.ask]) : []
 
+  // Build final ask list first, so we can remove conflicts from allow
+  const finalAsk = profile.ask
+    ? [...new Set([...existingAsk, ...missingAsk, ...(profile.ask ?? [])])]
+    : [...existingAsk]
+
+  // Build final deny list before cleaning allow
+  const finalDeny = [...(settings.permissions?.deny ?? []), ...missingDeny]
+
+  // Remove allow rules that conflict with ask or deny rules
+  const askSet = new Set(finalAsk)
+  const denySet = new Set(finalDeny)
+  const mergedAllow = [...existingAllow, ...missingAllow]
+  const cleanedAllow = mergedAllow.filter(rule => !askSet.has(rule) && !denySet.has(rule))
+  const removedFromAllow = mergedAllow.length - cleanedAllow.length
+
   const updatedPermissions = {
     ...settings.permissions,
-    deny: [...(settings.permissions?.deny ?? []), ...missingDeny],
-    allow: [...existingAllow, ...missingAllow],
-    ...(profile.ask && missingAsk.length > 0
-      ? { ask: [...existingAsk, ...missingAsk] }
-      : {}),
+    deny: finalDeny,
+    allow: cleanedAllow,
+    ...(finalAsk.length > 0 ? { ask: finalAsk } : {}),
   }
 
   // Detect conflicts between final allow and deny lists
@@ -103,6 +117,7 @@ export function applyProfileToSettings(
     addedDeny: missingDeny.length,
     addedAllow: missingAllow.length,
     addedAsk: missingAsk.length,
+    removedFromAllow,
     ...(conflicts.length > 0 ? { conflicts } : {}),
     ...(crossToolConflicts.length > 0 ? { crossToolConflicts } : {}),
   }

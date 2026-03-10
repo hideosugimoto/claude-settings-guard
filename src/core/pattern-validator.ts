@@ -286,6 +286,54 @@ export function checkPrefixBypasses(
   }]
 }
 
+/**
+ * Detect allow rules that conflict with deny rules.
+ * deny wins at runtime, but having both is redundant and risky if behavior changes.
+ */
+export function checkAllowDenyConflicts(
+  allowRules: readonly string[],
+  denyRules: readonly string[],
+): readonly DiagnosticIssue[] {
+  if (denyRules.length === 0) return []
+
+  const denySet = new Set(denyRules)
+  const conflicts = allowRules.filter(rule => denySet.has(rule))
+
+  if (conflicts.length === 0) return []
+
+  return [{
+    severity: 'warning',
+    code: 'ALLOW_DENY_CONFLICT',
+    message: `${conflicts.length} patterns found in both allow and deny (redundant, deny wins)`,
+    details: conflicts,
+    fix: 'allow から該当ルールを削除してください。`csg setup` で自動除去できます。',
+  }]
+}
+
+/**
+ * Detect allow rules that conflict with ask rules.
+ * When both exist, allow takes priority and ask is ignored — this is likely unintended.
+ */
+export function checkAllowAskConflicts(
+  allowRules: readonly string[],
+  askRules: readonly string[],
+): readonly DiagnosticIssue[] {
+  if (askRules.length === 0) return []
+
+  const askSet = new Set(askRules)
+  const conflicts = allowRules.filter(rule => askSet.has(rule))
+
+  if (conflicts.length === 0) return []
+
+  return [{
+    severity: 'warning',
+    code: 'ALLOW_ASK_CONFLICT',
+    message: `${conflicts.length} patterns found in both allow and ask (allow takes priority, ask is ignored)`,
+    details: conflicts,
+    fix: 'allow から該当ルールを削除してください。`csg setup` で自動除去できます。',
+  }]
+}
+
 export function findConflicts(
   allowRules: readonly string[],
   denyRules: readonly string[]

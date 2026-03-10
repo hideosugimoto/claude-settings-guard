@@ -289,7 +289,7 @@ describe('H2: strict profile Edit deny for .env', () => {
 // H3: Profile applicator conflict warning
 // ============================================================
 describe('H3: Profile applicator returns conflict warnings', () => {
-  it('returns conflicts when allow and deny overlap', () => {
+  it('auto-removes allow rules that conflict with deny (no conflicts reported)', () => {
     const settings: ClaudeSettings = {
       permissions: {
         allow: ['Read(**/.env)'],
@@ -297,8 +297,11 @@ describe('H3: Profile applicator returns conflict warnings', () => {
       },
     }
     const result = applyProfileToSettings(settings, balancedProfile)
-    expect(result.conflicts).toBeDefined()
-    expect(result.conflicts!.length).toBeGreaterThan(0)
+    // Conflict is auto-resolved: Read(**/.env) removed from allow
+    expect(result.settings.permissions!.allow).not.toContain('Read(**/.env)')
+    expect(result.removedFromAllow).toBeGreaterThanOrEqual(1)
+    // No unresolved conflicts remain
+    expect(result.conflicts).toBeUndefined()
   })
 
   it('returns no conflicts for clean settings', () => {
