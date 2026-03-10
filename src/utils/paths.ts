@@ -43,6 +43,10 @@ export function getBackupPath(originalPath: string): string {
   return join(getBackupDir(), `${fileName}.${timestamp}.bak`)
 }
 
+export function getClaudeMdPath(): string {
+  return join(homedir(), '.claude', 'CLAUDE.md')
+}
+
 export async function ensureDir(dirPath: string): Promise<void> {
   await mkdir(dirPath, { recursive: true })
 }

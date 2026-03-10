@@ -2,11 +2,12 @@ import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
-import { printHeader, printSuccess, printError } from '../utils/display.js'
+import { printHeader, printSuccess, printError, printWarning } from '../utils/display.js'
 import { deploySlashCommands, printDeployResult } from './deploy-slash.js'
 import { isValidProfileName, getProfile } from '../profiles/index.js'
 import { applyProfileToSettings } from '../core/profile-applicator.js'
 import { installSessionHook } from '../core/session-hook.js'
+import { updateClaudeMd } from '../core/claude-md-updater.js'
 import type { ProfileName } from '../types.js'
 
 export interface InitOptions {
@@ -24,6 +25,18 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   process.stdout.write('スラッシュコマンドをデプロイ中...\n')
   const deployResult = await deploySlashCommands({ force: options.force })
   printDeployResult(deployResult)
+
+  try {
+    const claudeMdResult = await updateClaudeMd()
+    const messages: Record<string, string> = {
+      added: 'CLAUDE.md に Bash コマンドルールを追加しました',
+      updated: 'CLAUDE.md の Bash コマンドルールを更新しました',
+      skipped: 'CLAUDE.md の Bash コマンドルールは最新です',
+    }
+    printSuccess(messages[claudeMdResult.action])
+  } catch (error) {
+    printWarning(`CLAUDE.md の更新に失敗しました: ${(error as Error).message}`)
+  }
 
   const profileName = resolveProfile(options.profile)
   if (options.profile) {
