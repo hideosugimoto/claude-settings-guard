@@ -7,6 +7,8 @@ export interface ApplyProfileResult {
   readonly addedAllow: number
   readonly addedAsk: number
   readonly removedFromAllow: number
+  readonly removedFromDeny: readonly string[]
+  readonly removedFromAsk: readonly string[]
   readonly conflicts?: readonly string[]
   readonly crossToolConflicts?: readonly string[]
 }
@@ -78,13 +80,41 @@ export function applyProfileToSettings(
   const existingAsk = settings.permissions?.ask ?? []
   const missingAsk = profile.ask ? findMissing(existingAsk, [...profile.ask]) : []
 
-  // Build final ask list first, so we can remove conflicts from allow
-  const finalAsk = profile.ask
+  // Build final ask list first, so we can remove conflicts from allow.
+  // When switching profiles, remove ask entries that the new profile wants in allow.
+  // e.g., balanced puts Edit/Write in ask, but minimal wants them in allow.
+  const profileAllowSet = new Set(profile.allow)
+  const mergedAsk = profile.ask
     ? [...new Set([...existingAsk, ...missingAsk, ...(profile.ask ?? [])])]
     : [...existingAsk]
+  const finalAsk = mergedAsk.filter(rule => !profileAllowSet.has(rule))
+  const removedFromAsk = mergedAsk.filter(rule => profileAllowSet.has(rule))
 
-  // Build final deny list before cleaning allow
-  const finalDeny = [...(settings.permissions?.deny ?? []), ...missingDeny]
+  // Build final deny list, then clean up stale deny entries from previous profiles.
+  // Keep only: rules in new profile's deny + DEFAULT_DENY_RULES + user-added rules not from any profile.
+  // Strategy: remove deny rules that belong to OTHER profiles but not the current one.
+  const mergedDeny = [...new Set([...(settings.permissions?.deny ?? []), ...missingDeny])]
+  const profileDenySet = new Set([...DEFAULT_DENY_RULES, ...profile.deny])
+  // Also keep rules not from any known profile deny set (user-added custom rules)
+  const allProfileDenyRules = new Set([
+    ...DEFAULT_DENY_RULES,
+    // Import all profile deny rules to identify which are profile-managed
+    'Bash(sudo *)', 'Bash(su *)', 'Bash(rm -rf /*)', 'Bash(rm -rf ~*)',
+    'Bash(eval *)', 'Bash(base64 *)',
+    'Bash(chmod 777 *)', 'Bash(chmod +s *)', 'Bash(chmod u+s *)', 'Bash(chmod g+s *)',
+    'Bash(curl *)', 'Bash(wget *)',
+    'Read(**/.env)', 'Read(**/.env.*)', 'Read(**/secrets/**)',
+    'Read(**/*secret*)', 'Read(**/*credential*)', 'Read(**/*.secret)',
+    'Write(**/.env)', 'Write(**/.env.*)', 'Write(**/secrets/**)',
+    'Edit(**/.env)', 'Edit(**/.env.*)', 'Edit(**/secrets/**)',
+    'Grep(**/.env)', 'Grep(**/.env.*)', 'Grep(**/secrets/**)',
+  ])
+  const finalDeny = mergedDeny.filter(rule =>
+    profileDenySet.has(rule) || !allProfileDenyRules.has(rule)
+  )
+  const removedFromDeny = mergedDeny.filter(rule =>
+    !profileDenySet.has(rule) && allProfileDenyRules.has(rule)
+  )
 
   // Find bare tool names that would override specific ask patterns
   // e.g., bare "Bash" in allow overrides "Bash(git push *)" in ask
@@ -136,8 +166,10 @@ export function applyProfileToSettings(
   )
   const removedFromAllow = mergedAllow.length - cleanedAllow.length
 
+  // Destructure to separate ask from the rest, so stale ask doesn't persist
+  const { ask: _existingAskProp, ...permissionsWithoutAsk } = settings.permissions ?? {}
   const updatedPermissions = {
-    ...settings.permissions,
+    ...permissionsWithoutAsk,
     deny: finalDeny,
     allow: cleanedAllow,
     ...(finalAsk.length > 0 ? { ask: finalAsk } : {}),
@@ -161,6 +193,8 @@ export function applyProfileToSettings(
     addedAllow: missingAllow.length,
     addedAsk: missingAsk.length,
     removedFromAllow,
+    removedFromDeny,
+    removedFromAsk,
     ...(conflicts.length > 0 ? { conflicts } : {}),
     ...(crossToolConflicts.length > 0 ? { crossToolConflicts } : {}),
   }

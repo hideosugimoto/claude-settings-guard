@@ -114,4 +114,119 @@ describe('applyProfileToSettings', () => {
     expect(result.settings.permissions?.deny).toBeDefined()
     expect(result.settings.permissions?.allow).toBeDefined()
   })
+
+  it('removes stale ask entries when switching to a profile that allows them', () => {
+    // Simulate: balanced was applied first (Edit/Write in ask)
+    const afterBalanced = applyProfileToSettings({}, balancedProfile)
+    expect(afterBalanced.settings.permissions?.ask).toContain('Edit')
+
+    // Now switch to minimal (Edit/Write should be in allow, not ask)
+    const minimalWithAllow: Profile = {
+      name: 'minimal',
+      description: 'test',
+      deny: ['Bash(sudo *)'],
+      allow: ['Read', 'Edit', 'Write', 'Bash'],
+      ask: [],
+      hooks: { enforce: true, sessionDiagnose: false },
+    }
+    const afterMinimal = applyProfileToSettings(afterBalanced.settings, minimalWithAllow)
+
+    const askAfterMinimal = afterMinimal.settings.permissions?.ask ?? []
+    expect(askAfterMinimal).not.toContain('Edit')
+    expect(askAfterMinimal).not.toContain('Write')
+    expect(afterMinimal.settings.permissions?.allow).toContain('Edit')
+    expect(afterMinimal.settings.permissions?.allow).toContain('Write')
+  })
+
+  it('removes stale deny entries when switching to a less strict profile', () => {
+    const strictProfile: Profile = {
+      name: 'strict',
+      description: 'test',
+      deny: ['Bash(sudo *)', 'Bash(curl *)', 'Bash(wget *)', 'Read(**/.env)'],
+      allow: ['Read', 'Glob'],
+      ask: ['Bash', 'Edit'],
+      hooks: { enforce: true, sessionDiagnose: true },
+    }
+    const afterStrict = applyProfileToSettings({}, strictProfile)
+    expect(afterStrict.settings.permissions?.deny).toContain('Bash(curl *)')
+    expect(afterStrict.settings.permissions?.deny).toContain('Bash(wget *)')
+
+    // Switch to minimal (no curl/wget deny)
+    const minimalLike: Profile = {
+      name: 'minimal',
+      description: 'test',
+      deny: ['Bash(sudo *)'],
+      allow: ['Read', 'Edit', 'Write', 'Bash'],
+      ask: [],
+      hooks: { enforce: true, sessionDiagnose: false },
+    }
+    const afterMinimal = applyProfileToSettings(afterStrict.settings, minimalLike)
+
+    expect(afterMinimal.settings.permissions?.deny).not.toContain('Bash(curl *)')
+    expect(afterMinimal.settings.permissions?.deny).not.toContain('Bash(wget *)')
+    expect(afterMinimal.settings.permissions?.deny).toContain('Bash(sudo *)')
+    expect(afterMinimal.removedFromDeny).toContain('Bash(curl *)')
+    expect(afterMinimal.removedFromDeny).toContain('Bash(wget *)')
+  })
+
+  it('preserves user-added custom deny rules during profile switch', () => {
+    // User has a custom deny rule not from any profile
+    const settings: ClaudeSettings = {
+      permissions: {
+        deny: ['Bash(sudo *)', 'Bash(curl *)', 'Bash(my-custom-dangerous-cmd *)'],
+      },
+    }
+
+    const minimalLike: Profile = {
+      name: 'minimal',
+      description: 'test',
+      deny: ['Bash(sudo *)'],
+      allow: ['Read'],
+      hooks: { enforce: true, sessionDiagnose: false },
+    }
+    const result = applyProfileToSettings(settings, minimalLike)
+
+    // curl removed (known profile rule), custom preserved
+    expect(result.settings.permissions?.deny).not.toContain('Bash(curl *)')
+    expect(result.settings.permissions?.deny).toContain('Bash(my-custom-dangerous-cmd *)')
+    expect(result.settings.permissions?.deny).toContain('Bash(sudo *)')
+  })
+
+  it('reports removed ask entries in removedFromAsk', () => {
+    const afterBalanced = applyProfileToSettings({}, balancedProfile)
+
+    const minimalLike: Profile = {
+      name: 'minimal',
+      description: 'test',
+      deny: ['Bash(sudo *)'],
+      allow: ['Read', 'Edit', 'Write', 'Bash'],
+      ask: [],
+      hooks: { enforce: true, sessionDiagnose: false },
+    }
+    const result = applyProfileToSettings(afterBalanced.settings, minimalLike)
+
+    expect(result.removedFromAsk).toContain('Edit')
+  })
+
+  it('keeps ask entries that are not in the new profile allow', () => {
+    // balanced puts Bash in ask
+    const afterBalanced = applyProfileToSettings({}, balancedProfile)
+
+    // A profile that allows Edit but not Bash
+    const customProfile: Profile = {
+      name: 'minimal',
+      description: 'test',
+      deny: ['Bash(sudo *)'],
+      allow: ['Read', 'Edit'],
+      ask: ['Bash(git push *)'],
+      hooks: { enforce: true, sessionDiagnose: false },
+    }
+    const result = applyProfileToSettings(afterBalanced.settings, customProfile)
+
+    // Bash should remain in ask (not in new profile's allow)
+    expect(result.settings.permissions?.ask).toContain('Bash')
+    // Edit should be removed from ask and moved to allow
+    expect(result.settings.permissions?.ask).not.toContain('Edit')
+    expect(result.settings.permissions?.allow).toContain('Edit')
+  })
 })

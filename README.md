@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-806%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-821%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -127,6 +127,7 @@ csg init --profile strict    # プロファイル指定
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask ルールが追加される
+├── CLAUDE.md                  ← Bash 複合コマンドルールが追加される
 ├── backups/                   ← 設定変更前の自動バックアップ
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 強制フック
@@ -331,7 +332,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (34 files, 806 tests)
+npm test               # テスト実行 (35 files, 821 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -358,6 +359,7 @@ src/
 │   ├── hook-script-builder.ts # シェルスクリプト構築
 │   ├── pattern-grouper.ts    # コマンドプレフィックスのグルーピング
 │   ├── recommendation-applier.ts # 推薦の自動適用
+│   ├── claude-md-updater.ts  # CLAUDE.md Bash ルール管理
 │   ├── session-hook.ts       # セッション起動時フック
 │   ├── telemetry-analyzer.ts # テレメトリ分析
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 フレーミング
@@ -488,6 +490,7 @@ csg init --profile strict    # Profile-based init
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask rules added
+├── CLAUDE.md                  ← Bash compound command rules added
 ├── backups/                   ← Auto-backups before changes
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 enforcement hook
@@ -692,7 +695,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (34 files, 806 tests)
+npm test               # Run tests (35 files, 821 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
@@ -719,6 +722,7 @@ src/
 │   ├── hook-script-builder.ts # Shell script building
 │   ├── pattern-grouper.ts    # Command prefix grouping
 │   ├── recommendation-applier.ts # Auto-apply recommendations
+│   ├── claude-md-updater.ts  # CLAUDE.md Bash rules management
 │   ├── session-hook.ts       # Session startup hook
 │   ├── telemetry-analyzer.ts # Telemetry analysis
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 framing

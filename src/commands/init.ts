@@ -51,6 +51,8 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   }
 
   const applied = applyProfileToSettings(settings, profile)
+
+  // Show what was added
   if (applied.addedDeny > 0) {
     process.stdout.write(`\ndeny ルールを追加 (${applied.addedDeny}件)\n`)
   } else {
@@ -59,6 +61,26 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   if (applied.addedAllow > 0) process.stdout.write(`allow ルールを追加 (${applied.addedAllow}件)\n`)
   if (applied.addedAsk > 0) process.stdout.write(`ask ルールを追加 (${applied.addedAsk}件)\n`)
   if (applied.removedFromAllow > 0) process.stdout.write(`allow 競合を解消: deny/ask と重複する ${applied.removedFromAllow}件を allow から除去\n`)
+
+  // Show what was removed (profile switch cleanup)
+  const hasRemovals = applied.removedFromDeny.length > 0 || applied.removedFromAsk.length > 0
+  if (hasRemovals) {
+    process.stdout.write(`\n`)
+    printWarning('プロファイル切り替えにより、以前のプロファイルの設定が変更されました:')
+    if (applied.removedFromDeny.length > 0) {
+      process.stdout.write(`  deny から除去 (${applied.removedFromDeny.length}件):\n`)
+      for (const rule of applied.removedFromDeny) {
+        process.stdout.write(`    - ${rule}\n`)
+      }
+    }
+    if (applied.removedFromAsk.length > 0) {
+      process.stdout.write(`  ask から除去 (${applied.removedFromAsk.length}件):\n`)
+      for (const rule of applied.removedFromAsk) {
+        process.stdout.write(`    - ${rule}\n`)
+      }
+    }
+    process.stdout.write(`  ※ バックアップから復元できます\n`)
+  }
 
   const withEnforce = profile.hooks.enforce
     ? await regenerateEnforceHook(applied.settings).then(result => {
