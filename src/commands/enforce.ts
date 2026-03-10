@@ -4,6 +4,7 @@ import { writeSettings } from '../core/settings-writer.js'
 import { printHeader, printSuccess, printError, printWarning } from '../utils/display.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
+import { exitWithError } from '../utils/exit.js'
 import type { ClaudeSettings } from '../types.js'
 
 export interface EnforceResult {
@@ -48,8 +49,7 @@ export async function enforceCommand(options: { dryRun?: boolean }): Promise<voi
 
   const enforceResult = await runEnforce()
   if (!enforceResult) {
-    printError('settings.json が見つかりません')
-    process.exit(1)
+    exitWithError('settings.json が見つかりません')
   }
 
   const { denyRules, script } = enforceResult
@@ -76,8 +76,7 @@ export async function enforceCommand(options: { dryRun?: boolean }): Promise<voi
 
   const settings = await readGlobalSettings()
   if (!settings) {
-    printError('settings.json が見つかりません')
-    process.exit(1)
+    exitWithError('settings.json が見つかりません')
   }
 
   const result = await applyEnforce(settings)

@@ -5,6 +5,7 @@ import {
   generateRecommendations,
 } from '../core/telemetry-analyzer.js'
 import { printHeader, printRecommendation, printSuccess } from '../utils/display.js'
+import { exitWithError } from '../utils/exit.js'
 import { confirm } from '../utils/prompt.js'
 import { applyRecommendations } from '../core/recommendation-applier.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
@@ -27,9 +28,13 @@ export async function runRecommend(): Promise<RecommendResult> {
   const allAllow = [...rules.allowRules, ...rules.legacyAllowedTools]
   const allDeny = [...rules.denyRules, ...rules.legacyDeny]
 
-  const events = await loadTelemetryEvents()
+  const { events, skippedLines } = await loadTelemetryEvents()
   if (events.length === 0) {
     return { recommendations: [], eventCount: 0 }
+  }
+
+  if (skippedLines > 0) {
+    process.stderr.write(`  [warn] ${skippedLines} malformed telemetry lines skipped\n`)
   }
 
   const stats = analyzePermissionEvents(events)
@@ -43,8 +48,7 @@ export async function recommendCommand(options: { yes?: boolean } = {}): Promise
 
   const settings = await readGlobalSettings()
   if (!settings) {
-    process.stdout.write('settings.json が見つかりません\n')
-    process.exit(1)
+    exitWithError('settings.json が見つかりません')
   }
 
   const { recommendations, eventCount } = await runRecommend()
@@ -107,8 +111,7 @@ export async function recommendCommand(options: { yes?: boolean } = {}): Promise
 
   const result = await writeSettings(getGlobalSettingsPath(), nextSettings)
   if (!result.success) {
-    process.stdout.write(`設定の書き込みに失敗しました: ${result.error}\n`)
-    process.exit(1)
+    exitWithError(`設定の書き込みに失敗しました: ${result.error}`)
   }
 
   printSuccess('推薦を適用しました')

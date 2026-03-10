@@ -3,6 +3,7 @@ import {
   analyzePermissionEvents,
   generateRecommendations,
   getAnalysisPeriod,
+  isTelemetryEvent,
 } from '../src/core/telemetry-analyzer.js'
 import type { TelemetryEvent } from '../src/types.js'
 
@@ -154,6 +155,76 @@ describe('generateRecommendations', () => {
 
     const recs = generateRecommendations(stats, [], [])
     expect(recs).toHaveLength(0) // below threshold
+  })
+})
+
+describe('isTelemetryEvent', () => {
+  it('returns true for a valid TelemetryEvent object', () => {
+    const valid = {
+      event_type: 'ClaudeCodeInternalEvent',
+      event_data: {
+        event_name: 'tool_use_allowed',
+        client_timestamp: '2026-03-01T10:00:00.000Z',
+      },
+    }
+    expect(isTelemetryEvent(valid)).toBe(true)
+  })
+
+  it('returns false for null', () => {
+    expect(isTelemetryEvent(null)).toBe(false)
+  })
+
+  it('returns false for undefined', () => {
+    expect(isTelemetryEvent(undefined)).toBe(false)
+  })
+
+  it('returns false for a string', () => {
+    expect(isTelemetryEvent('not an event')).toBe(false)
+  })
+
+  it('returns false when event_type is missing', () => {
+    const missing = {
+      event_data: {
+        event_name: 'test',
+        client_timestamp: '2026-03-01T10:00:00.000Z',
+      },
+    }
+    expect(isTelemetryEvent(missing)).toBe(false)
+  })
+
+  it('returns false when event_data is missing', () => {
+    const missing = { event_type: 'ClaudeCodeInternalEvent' }
+    expect(isTelemetryEvent(missing)).toBe(false)
+  })
+
+  it('returns false when event_name is not a string', () => {
+    const invalid = {
+      event_type: 'ClaudeCodeInternalEvent',
+      event_data: {
+        event_name: 123,
+        client_timestamp: '2026-03-01T10:00:00.000Z',
+      },
+    }
+    expect(isTelemetryEvent(invalid)).toBe(false)
+  })
+
+  it('returns false when client_timestamp is not a string', () => {
+    const invalid = {
+      event_type: 'ClaudeCodeInternalEvent',
+      event_data: {
+        event_name: 'test',
+        client_timestamp: 12345,
+      },
+    }
+    expect(isTelemetryEvent(invalid)).toBe(false)
+  })
+
+  it('returns false when event_data is not an object', () => {
+    const invalid = {
+      event_type: 'ClaudeCodeInternalEvent',
+      event_data: 'not an object',
+    }
+    expect(isTelemetryEvent(invalid)).toBe(false)
   })
 })
 

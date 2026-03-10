@@ -7,6 +7,7 @@ import { initCommand } from './commands/init.js'
 import { setupCommand } from './commands/setup.js'
 import { startMcpServer } from './mcp-server.js'
 import { VERSION } from './version.js'
+import { handleCommandError } from './utils/exit.js'
 
 const program = new Command()
 
@@ -20,8 +21,7 @@ program
     try {
       await setupCommand({ yes: opts.yes, profile: opts.profile })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -34,8 +34,7 @@ program
     try {
       await setupCommand({ yes: opts.yes, profile: opts.profile })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -48,8 +47,7 @@ program
     try {
       await diagnoseCommand({ json: opts.json, quiet: opts.quiet })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -61,8 +59,7 @@ program
     try {
       await migrateCommand({ dryRun: opts.dryRun })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -74,8 +71,7 @@ program
     try {
       await recommendCommand({ yes: opts.yes })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -87,8 +83,7 @@ program
     try {
       await enforceCommand({ dryRun: opts.dryRun })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -102,8 +97,7 @@ program
     try {
       await initCommand({ profile: opts.profile, force: opts.force, dryRun: opts.dryRun })
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 
@@ -114,8 +108,7 @@ program
     try {
       await startMcpServer()
     } catch (err) {
-      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
-      process.exit(1)
+      handleCommandError(err)
     }
   })
 

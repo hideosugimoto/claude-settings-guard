@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
 import { validatePatterns, findConflicts, checkAllowAskConflicts, checkAllowDenyConflicts, checkBareToolConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
+import { exitWithError } from '../utils/exit.js'
 import { getHooksDir } from '../utils/paths.js'
 import { join } from 'node:path'
 import type { DiagnosticIssue } from '../types.js'
@@ -156,8 +157,7 @@ export async function diagnoseCommand(options: DiagnoseCommandOptions = {}): Pro
   printHeader('Claude Settings Guard - 診断レポート')
 
   if (totalPatterns === 0 && issues.length === 0) {
-    process.stdout.write('settings.json が見つかりません\n')
-    process.exit(1)
+    exitWithError('settings.json が見つかりません')
   }
 
   if (issues.length === 0) {

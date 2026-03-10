@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, resolve, isAbsolute, normalize } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 
 export function expandHome(filePath: string): string {
@@ -18,7 +18,14 @@ export function getLocalSettingsPath(): string {
 }
 
 export function getProjectSettingsPath(projectDir: string): string {
-  return join(projectDir, '.claude', 'settings.json')
+  if (!isAbsolute(projectDir)) {
+    throw new Error('Project directory must be an absolute path')
+  }
+  if (projectDir.split('/').some((segment) => segment === '..')) {
+    throw new Error('Project directory must not contain path traversal')
+  }
+  const normalized = normalize(projectDir)
+  return join(normalized, '.claude', 'settings.json')
 }
 
 export function getBackupDir(): string {

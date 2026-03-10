@@ -11,6 +11,18 @@ import {
 import type { TelemetryEvent, Recommendation } from '../types.js'
 import { groupStatsByPrefix } from './pattern-grouper.js'
 
+export function isTelemetryEvent(value: unknown): value is TelemetryEvent {
+  if (typeof value !== 'object' || value === null) return false
+  const obj = value as Record<string, unknown>
+  if (typeof obj.event_type !== 'string') return false
+  if (typeof obj.event_data !== 'object' || obj.event_data === null) return false
+  const eventData = obj.event_data as Record<string, unknown>
+  return (
+    typeof eventData.event_name === 'string' &&
+    typeof eventData.client_timestamp === 'string'
+  )
+}
+
 export interface ToolStats {
   readonly tool: string
   readonly pattern: string
@@ -53,18 +65,24 @@ function getEventDecision(event: TelemetryEvent): 'allowed' | 'denied' | 'prompt
   return null
 }
 
-export async function loadTelemetryEvents(): Promise<readonly TelemetryEvent[]> {
+export interface TelemetryLoadResult {
+  readonly events: readonly TelemetryEvent[]
+  readonly skippedLines: number
+}
+
+export async function loadTelemetryEvents(): Promise<TelemetryLoadResult> {
   const telemetryDir = getTelemetryDir()
   let files: string[]
 
   try {
     files = await readdir(telemetryDir)
   } catch {
-    return []
+    return { events: [], skippedLines: 0 }
   }
 
   const eventFiles = files.filter(f => f.startsWith('1p_failed_events.') && f.endsWith('.json'))
   const events: TelemetryEvent[] = []
+  let skippedLines = 0
 
   for (const file of eventFiles) {
     try {
@@ -73,25 +91,22 @@ export async function loadTelemetryEvents(): Promise<readonly TelemetryEvent[]> 
       for (const line of lines) {
         if (!line.trim()) continue
         try {
-          const parsed = JSON.parse(line)
-          if (
-            parsed.event_type &&
-            parsed.event_data &&
-            typeof parsed.event_data.event_name === 'string' &&
-            typeof parsed.event_data.client_timestamp === 'string'
-          ) {
-            events.push(parsed as TelemetryEvent)
+          const parsed: unknown = JSON.parse(line)
+          if (isTelemetryEvent(parsed)) {
+            events.push(parsed)
+          } else {
+            skippedLines++
           }
         } catch {
-          // skip malformed lines
+          skippedLines++
         }
       }
     } catch {
-      // skip unreadable files
+      // skip unreadable files — not counted as skipped lines
     }
   }
 
-  return events
+  return { events, skippedLines }
 }
 
 export function analyzePermissionEvents(

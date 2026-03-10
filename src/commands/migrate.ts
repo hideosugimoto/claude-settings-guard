@@ -3,6 +3,7 @@ import { migrateStructure } from '../core/pattern-migrator.js'
 import { writeSettings, generateDiff } from '../core/settings-writer.js'
 import { printHeader, printMigration, printSuccess, printError } from '../utils/display.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
+import { exitWithError } from '../utils/exit.js'
 import type { ClaudeSettings, MigrationResult } from '../types.js'
 
 export interface MigrateCheckResult {
@@ -32,8 +33,7 @@ export async function migrateCommand(options: { dryRun?: boolean }): Promise<voi
 
   const check = await checkMigration()
   if (!check) {
-    printError('settings.json が見つかりません')
-    process.exit(1)
+    exitWithError('settings.json が見つかりません')
   }
 
   const { results, migrated, original } = check
@@ -85,7 +85,6 @@ export async function migrateCommand(options: { dryRun?: boolean }): Promise<voi
       process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
     }
   } else {
-    printError(`マイグレーション失敗: ${result.error}`)
-    process.exit(1)
+    exitWithError(`マイグレーション失敗: ${result.error}`)
   }
 }

@@ -58,7 +58,7 @@ async function readClaudeMd(filePath: string): Promise<string> {
   try {
     return await readFile(filePath, 'utf-8')
   } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
       return ''
     }
     throw error

@@ -168,7 +168,7 @@ export async function handleRecommend(args: Record<string, unknown>): Promise<Mc
   const allAllow = [...allow, ...legacyAllowedTools]
   const allDeny = [...deny, ...legacyDeny]
 
-  const events = await loadTelemetryEvents()
+  const { events, skippedLines } = await loadTelemetryEvents()
   const stats = analyzePermissionEvents(events)
   const period = getAnalysisPeriod(events)
 
@@ -197,6 +197,7 @@ export async function handleRecommend(args: Record<string, unknown>): Promise<Mc
     },
     telemetry: {
       totalEvents: events.length,
+      skippedLines,
       analyzedPeriod: period,
       toolStats,
     },
