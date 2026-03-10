@@ -50,7 +50,6 @@ function detectCrossToolConflicts(
     if (FILE_READ_COMMANDS.has(cmd) && hasReadDeny) bypasses.push('Read/Grep')
     if (FILE_WRITE_COMMANDS.has(cmd) && hasWriteDeny) bypasses.push('Write')
     if (FILE_WRITE_COMMANDS.has(cmd) && hasEditDeny) bypasses.push('Edit')
-    if (cmd === 'sed' && hasReadDeny && !bypasses.some(b => b.includes('Read'))) bypasses.push('Read/Grep')
 
     if (bypasses.length > 0) {
       conflicts.push(`Bash(${cmd} *) can bypass ${bypasses.join('/')} deny rules`)

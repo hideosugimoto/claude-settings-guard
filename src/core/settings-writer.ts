@@ -66,10 +66,8 @@ export async function writeSettings(
     // Clean up temp file (catch ENOENT instead of existsSync to avoid TOCTOU race)
     try {
       await unlink(tempPath)
-    } catch (unlinkErr: unknown) {
-      const isNotFound = unlinkErr instanceof Error && 'code' in unlinkErr && (unlinkErr as NodeJS.ErrnoException).code === 'ENOENT'
-      if (!isNotFound) { /* ignore cleanup errors */ }
-      // ignore cleanup errors
+    } catch {
+      // ignore cleanup errors (file may not exist)
     }
     return {
       success: false,

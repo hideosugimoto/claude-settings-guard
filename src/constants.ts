@@ -27,6 +27,7 @@ export const SAFE_ENV_SUFFIXES = [
 
 export const DEFAULT_DENY_RULES: readonly string[] = [
   'Bash(sudo *)', 'Bash(su *)', 'Bash(rm -rf /*)', 'Bash(rm -rf ~*)',
+  'Bash(eval *)', 'Bash(base64 *)',
   'Read(**/.env)', 'Read(**/.env.*)', 'Read(**/secrets/**)',
   'Read(**/*.secret)', 'Read(**/*credential*)',
   'Write(**/.env)', 'Write(**/.env.*)', 'Write(**/secrets/**)',

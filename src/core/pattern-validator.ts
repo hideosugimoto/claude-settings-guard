@@ -290,8 +290,15 @@ export function findConflicts(
   allowRules: readonly string[],
   denyRules: readonly string[]
 ): readonly DiagnosticIssue[] {
-  const normalizeForCompare = (p: string): string =>
-    p.replace(LEGACY_COLON_PATTERN, '$1($2 $3)')
+  const normalizeForCompare = (p: string): string => {
+    const migrated = p.replace(LEGACY_COLON_PATTERN, '$1($2 $3)')
+    // Case-insensitive: normalize tool arguments to lowercase for comparison
+    const match = migrated.match(MODERN_SPACE_PATTERN)
+    if (match) {
+      return `${match[1]}(${match[2].toLowerCase()})`
+    }
+    return migrated.toLowerCase()
+  }
 
   const normalizedAllow = new Set(allowRules.map(normalizeForCompare))
   const conflicts: string[] = []
