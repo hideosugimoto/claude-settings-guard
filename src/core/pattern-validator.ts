@@ -287,6 +287,39 @@ export function checkPrefixBypasses(
 }
 
 /**
+ * Detect bare tool names in allow that override specific ask patterns.
+ * e.g., bare "Bash" in allow overrides "Bash(git push *)" in ask.
+ */
+export function checkBareToolConflicts(
+  allowRules: readonly string[],
+  askRules: readonly string[],
+): readonly DiagnosticIssue[] {
+  if (askRules.length === 0) return []
+
+  // Find bare tool names in allow (no parentheses, e.g. "Bash", "Edit")
+  const bareToolsInAllow = allowRules.filter(rule => BARE_TOOL_PATTERN.test(rule))
+  if (bareToolsInAllow.length === 0) return []
+
+  // Check which bare tools conflict with ask rules
+  const conflicting = bareToolsInAllow.filter(bareTool => {
+    return askRules.some(askRule => {
+      // bare "Bash" conflicts with "Bash(git push *)" or bare "Bash"
+      return askRule === bareTool || askRule.startsWith(`${bareTool}(`)
+    })
+  })
+
+  if (conflicting.length === 0) return []
+
+  return [{
+    severity: 'critical',
+    code: 'BARE_TOOL_OVERRIDE',
+    message: `${conflicting.length} bare tool names in allow override specific ask patterns (ask rules are ignored)`,
+    details: conflicting,
+    fix: 'allow からベアツール名を削除してください。`csg setup` で自動除去できます。',
+  }]
+}
+
+/**
  * Detect allow rules that conflict with deny rules.
  * deny wins at runtime, but having both is redundant and risky if behavior changes.
  */

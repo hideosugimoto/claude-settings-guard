@@ -86,11 +86,29 @@ export function applyProfileToSettings(
   // Build final deny list before cleaning allow
   const finalDeny = [...(settings.permissions?.deny ?? []), ...missingDeny]
 
-  // Remove allow rules that conflict with ask or deny rules
+  // Find bare tool names that would override specific ask patterns
+  // e.g., bare "Bash" in allow overrides "Bash(git push *)" in ask
+  const bareToolsOverridingAsk = new Set(
+    finalAsk.length > 0
+      ? [...new Set(
+          [...existingAllow, ...missingAllow]
+            .filter(rule => /^\w+$/.test(rule))
+            .filter(bareTool =>
+              finalAsk.some(askRule =>
+                askRule === bareTool || askRule.startsWith(`${bareTool}(`)
+              )
+            )
+        )]
+      : []
+  )
+
+  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask
   const askSet = new Set(finalAsk)
   const denySet = new Set(finalDeny)
   const mergedAllow = [...existingAllow, ...missingAllow]
-  const cleanedAllow = mergedAllow.filter(rule => !askSet.has(rule) && !denySet.has(rule))
+  const cleanedAllow = mergedAllow.filter(rule =>
+    !askSet.has(rule) && !denySet.has(rule) && !bareToolsOverridingAsk.has(rule)
+  )
   const removedFromAllow = mergedAllow.length - cleanedAllow.length
 
   const updatedPermissions = {

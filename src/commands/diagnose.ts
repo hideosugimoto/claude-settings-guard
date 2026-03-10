@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
-import { validatePatterns, findConflicts, checkAllowAskConflicts, checkAllowDenyConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
+import { validatePatterns, findConflicts, checkAllowAskConflicts, checkAllowDenyConflicts, checkBareToolConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
 import { getHooksDir } from '../utils/paths.js'
 import { join } from 'node:path'
@@ -87,6 +87,10 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
     ...checkAllowDenyConflicts(
       [...rules.allowRules, ...rules.legacyAllowedTools],
       [...rules.denyRules, ...rules.legacyDeny],
+    ),
+    ...checkBareToolConflicts(
+      [...rules.allowRules, ...rules.legacyAllowedTools],
+      rules.askRules,
     ),
   ]
 

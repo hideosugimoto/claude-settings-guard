@@ -31,17 +31,20 @@ describe('applyProfileToSettings: allow/ask conflict resolution', () => {
       },
     }
     const result = applyProfileToSettings(settings, minimalProfile)
-    expect(result.removedFromAllow).toBe(3)
+    // 3 exact ask matches + 1 bare Bash added by profile then removed = 4
+    expect(result.removedFromAllow).toBe(4)
   })
 
-  it('returns 0 removedFromAllow when no conflicts', () => {
+  it('removes bare Bash added by profile (bare tool override)', () => {
     const settings: ClaudeSettings = {
       permissions: {
         allow: ['Read', 'Write', 'Glob'],
       },
     }
     const result = applyProfileToSettings(settings, minimalProfile)
-    expect(result.removedFromAllow).toBe(0)
+    // Profile adds bare Bash to allow, but ask has Bash(...) → bare Bash removed
+    expect(result.removedFromAllow).toBe(1)
+    expect(result.settings.permissions!.allow).not.toContain('Bash')
   })
 
   it('handles exact match between allow and ask', () => {
@@ -169,8 +172,8 @@ describe('Integration: user has pre-existing allow rules conflicting with ask', 
     expect(result.settings.permissions!.ask).toContain('Bash(git rebase *)')
     expect(result.settings.permissions!.ask).toContain('Bash(git tag *)')
 
-    // removedFromAllow reflects the count
-    expect(result.removedFromAllow).toBe(4)
+    // removedFromAllow: 4 exact matches + 1 bare Bash from profile = 5
+    expect(result.removedFromAllow).toBe(5)
   })
 })
 
@@ -242,7 +245,8 @@ describe('applyProfileToSettings: allow/deny conflict resolution', () => {
     expect(result.settings.permissions!.allow).not.toContain('Bash(git push *)')
     expect(result.settings.permissions!.allow).toContain('Bash(git status *)')
     expect(result.settings.permissions!.allow).toContain('Read')
-    expect(result.removedFromAllow).toBe(2)
+    // 2 exact matches + 1 bare Bash from profile = 3
+    expect(result.removedFromAllow).toBe(3)
   })
 
   it('does not remove allow rules from deny list (deny stays intact)', () => {
@@ -326,12 +330,15 @@ describe('Integration: allow/deny + allow/ask combined cleanup', () => {
     expect(result.settings.permissions!.allow).not.toContain('Bash(git push *)')
     expect(result.settings.permissions!.allow).not.toContain('Bash(git rebase *)')
 
+    // bare Bash also removed (overrides ask patterns)
+    expect(result.settings.permissions!.allow).not.toContain('Bash')
+
     // safe rules remain
     expect(result.settings.permissions!.allow).toContain('Read')
     expect(result.settings.permissions!.allow).toContain('Bash(git status *)')
     expect(result.settings.permissions!.allow).toContain('Bash(git commit *)')
 
-    // Total removed: 3 (deny) + 2 (ask) = 5
-    expect(result.removedFromAllow).toBe(5)
+    // Total removed: 3 (deny) + 2 (ask exact) + 1 (bare Bash) = 6
+    expect(result.removedFromAllow).toBe(6)
   })
 })
