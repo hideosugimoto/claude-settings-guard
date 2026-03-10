@@ -4,6 +4,7 @@ import { validatePatterns, findConflicts, checkAllowAskConflicts, checkAllowDeny
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
 import { exitWithError } from '../utils/exit.js'
 import { getHooksDir } from '../utils/paths.js'
+import { isJqAvailable } from '../utils/jq-check.js'
 import { join } from 'node:path'
 import type { DiagnosticIssue } from '../types.js'
 
@@ -104,8 +105,17 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
 
   const adjustedIssues = downgradeIfHookInstalled(allIssues, hookInstalled)
 
+  const jqIssues: readonly DiagnosticIssue[] = (hookInstalled && !isJqAvailable())
+    ? [{
+      severity: 'info' as const,
+      code: 'JQ_NOT_FOUND' as const,
+      message: 'jq がインストールされていません。enforce フックの実行に jq が必要です。',
+      fix: 'インストール: brew install jq (macOS) / apt install jq (Ubuntu)',
+    }]
+    : []
+
   const severityOrder = { critical: 0, warning: 1, info: 2 }
-  const sorted = [...adjustedIssues].sort(
+  const sorted = [...adjustedIssues, ...jqIssues].sort(
     (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
   )
 

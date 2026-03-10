@@ -5,6 +5,7 @@ import { printHeader, printSuccess, printError, printWarning } from '../utils/di
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
 import { exitWithError } from '../utils/exit.js'
+import { isJqAvailable } from '../utils/jq-check.js'
 import type { ClaudeSettings } from '../types.js'
 
 export interface EnforceResult {
@@ -57,6 +58,11 @@ export async function enforceCommand(options: { dryRun?: boolean }): Promise<voi
   if (denyRules.length === 0) {
     printWarning('deny ルールがありません。フック生成をスキップします。')
     return
+  }
+
+  if (!isJqAvailable()) {
+    printWarning('jq がインストールされていません。enforce フックの実行に jq が必要です。')
+    printWarning('インストール: brew install jq (macOS) / apt install jq (Ubuntu)')
   }
 
   process.stdout.write(`deny ルールから強制フックを生成中...\n`)

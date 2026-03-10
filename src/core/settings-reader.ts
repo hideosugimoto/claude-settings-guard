@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { claudeSettingsSchema, type ClaudeSettings, type SettingsLayer } from '../types.js'
 import { getGlobalSettingsPath, getLocalSettingsPath, getProjectSettingsPath } from '../utils/paths.js'
+import { debug } from '../utils/debug.js'
 
 export async function readSettingsFile(filePath: string): Promise<ClaudeSettings | null> {
+  debug(`Reading settings from ${filePath}`)
   let raw: string
   try {
     raw = await readFile(filePath, 'utf-8')
@@ -15,17 +17,15 @@ export async function readSettingsFile(filePath: string): Promise<ClaudeSettings
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
-  } catch (err) {
-    throw new Error(
-      `Failed to parse ${filePath}: ${err instanceof Error ? err.message : String(err)}`
-    )
+  } catch {
+    process.stderr.write(`Warning: failed to parse ${filePath} as JSON, skipping\n`)
+    return null
   }
   try {
     return claudeSettingsSchema.parse(parsed)
-  } catch (err) {
-    throw new Error(
-      `Invalid settings schema in ${filePath}: ${err instanceof Error ? err.message : String(err)}`
-    )
+  } catch {
+    process.stderr.write(`Warning: invalid settings schema in ${filePath}, skipping\n`)
+    return null
   }
 }
 

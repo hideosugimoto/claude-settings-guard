@@ -74,12 +74,13 @@ describe('H2: TOCTOU race - settings-reader', () => {
     })
   })
 
-  it('throws on invalid JSON', async () => {
+  it('returns null for invalid JSON (graceful degradation)', async () => {
     await withTempDir(async (dir) => {
       const filePath = join(dir, 'bad.json')
       await writeFile(filePath, 'not json at all', 'utf-8')
 
-      await expect(readSettingsFile(filePath)).rejects.toThrow('Failed to parse')
+      const result = await readSettingsFile(filePath)
+      expect(result).toBeNull()
     })
   })
 })

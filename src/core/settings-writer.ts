@@ -2,6 +2,7 @@ import { writeFile, readFile, rename, unlink } from 'node:fs/promises'
 import type { ClaudeSettings } from '../types.js'
 import { createBackup } from '../utils/backup.js'
 import { claudeSettingsSchema } from '../types.js'
+import { debug } from '../utils/debug.js'
 
 export interface WriteResult {
   readonly success: boolean
@@ -24,6 +25,7 @@ export async function writeSettings(
     }
   }
 
+  debug(`Writing settings to ${filePath}`)
   const json = JSON.stringify(settings, null, 2) + '\n'
 
   // Verify it's valid JSON by round-tripping
@@ -42,6 +44,9 @@ export async function writeSettings(
   if (!options.skipBackup) {
     try {
       backupPath = await createBackup(filePath)
+      if (backupPath) {
+        debug(`Created backup at ${backupPath}`)
+      }
     } catch (err: unknown) {
       const isNotFound = err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isNotFound) {
@@ -66,8 +71,10 @@ export async function writeSettings(
     // Clean up temp file (catch ENOENT instead of existsSync to avoid TOCTOU race)
     try {
       await unlink(tempPath)
-    } catch {
-      // ignore cleanup errors (file may not exist)
+    } catch (cleanupError) {
+      if (cleanupError instanceof Error && 'code' in cleanupError && (cleanupError as NodeJS.ErrnoException).code !== 'ENOENT') {
+        process.stderr.write(`Warning: failed to clean up temp file ${tempPath}: ${(cleanupError as Error).message}\n`)
+      }
     }
     return {
       success: false,

@@ -8,6 +8,7 @@ import { setupCommand } from './commands/setup.js'
 import { startMcpServer } from './mcp-server.js'
 import { VERSION } from './version.js'
 import { handleCommandError } from './utils/exit.js'
+import { enableDebug } from './utils/debug.js'
 
 const program = new Command()
 
@@ -17,6 +18,13 @@ program
   .version(VERSION)
   .option('-y, --yes', '非対話モード (全ステップを自動実行)')
   .option('--profile <name>', 'プロファイル (minimal, balanced, strict)')
+  .option('--debug', 'デバッグログを stderr に出力する')
+  .hook('preAction', (thisCommand) => {
+    const opts = thisCommand.opts()
+    if (opts.debug) {
+      enableDebug()
+    }
+  })
   .action(async (opts) => {
     try {
       await setupCommand({ yes: opts.yes, profile: opts.profile })
