@@ -1,4 +1,5 @@
 import type { Profile } from '../types.js'
+import { HARD_TO_REVERSE_ASK_RULES } from '../constants.js'
 
 export const balancedProfile: Profile = {
   name: 'balanced',
@@ -18,6 +19,7 @@ export const balancedProfile: Profile = {
   ],
   ask: [
     'Bash', 'Edit', 'Write',
+    ...HARD_TO_REVERSE_ASK_RULES,
   ],
   hooks: { enforce: true, sessionDiagnose: false },
 }

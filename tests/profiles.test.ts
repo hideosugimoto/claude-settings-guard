@@ -59,8 +59,10 @@ describe('profiles', () => {
       expect(minimalProfile.allow).toContain('Write')
     })
 
-    it('has no ask rules', () => {
-      expect(minimalProfile.ask).toBeUndefined()
+    it('has ask rules for hard-to-reverse commands', () => {
+      expect(minimalProfile.ask).toBeDefined()
+      expect(minimalProfile.ask).toContain('Bash(git push *)')
+      expect(minimalProfile.ask).toContain('Bash(npm publish *)')
     })
 
     it('enables enforce but not sessionDiagnose', () => {

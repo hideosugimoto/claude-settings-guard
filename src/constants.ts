@@ -66,5 +66,32 @@ export const PREFIX_COMMANDS: ReadonlySet<string> = new Set([
   'strace', 'ltrace', 'ionice', 'taskset', 'chrt',
 ])
 
+// Commands that are hard to reverse — should require confirmation (ask), not auto-allow
+// Included in all profiles (minimal, balanced, strict)
+export const HARD_TO_REVERSE_ASK_RULES: readonly string[] = [
+  'Bash(git push *)',
+  'Bash(git push)',
+  'Bash(git push --force *)',
+  'Bash(git reset --hard *)',
+  'Bash(git branch -D *)',
+  'Bash(git clean -f *)',
+  'Bash(git rebase *)',
+  'Bash(git tag *)',
+  'Bash(git stash drop *)',
+  'Bash(npm publish *)',
+  'Bash(npm publish)',
+]
+
+// Additional ask rules for strict profile only (infra/remote operations)
+export const STRICT_ONLY_ASK_RULES: readonly string[] = [
+  'Bash(ssh *)',
+  'Bash(scp *)',
+  'Bash(docker push *)',
+  'Bash(kubectl delete *)',
+  'Bash(kubectl apply *)',
+  'Bash(terraform apply *)',
+  'Bash(terraform destroy *)',
+]
+
 export const RECOMMEND_ALLOW_THRESHOLD = 3
 export const RECOMMEND_DENY_THRESHOLD = 2

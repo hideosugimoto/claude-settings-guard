@@ -1,4 +1,5 @@
 import type { Profile } from '../types.js'
+import { HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES } from '../constants.js'
 
 export const strictProfile: Profile = {
   name: 'strict',
@@ -24,6 +25,8 @@ export const strictProfile: Profile = {
   ],
   ask: [
     'Bash', 'Edit', 'Write',
+    ...HARD_TO_REVERSE_ASK_RULES,
+    ...STRICT_ONLY_ASK_RULES,
   ],
   hooks: { enforce: true, sessionDiagnose: true },
 }
