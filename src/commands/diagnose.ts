@@ -1,11 +1,41 @@
+import { existsSync } from 'node:fs'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
 import { validatePatterns, findConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
+import { getHooksDir } from '../utils/paths.js'
+import { join } from 'node:path'
 import type { DiagnosticIssue } from '../types.js'
 
 export interface DiagnoseResult {
   readonly issues: readonly DiagnosticIssue[]
   readonly totalPatterns: number
+}
+
+/**
+ * Downgrade CROSS_TOOL_BYPASS and PREFIX_BYPASS_RISK issues when
+ * the Layer 2 enforce hook is already installed, since the hook
+ * mitigates these risks at runtime.
+ */
+export function downgradeIfHookInstalled(
+  issues: readonly DiagnosticIssue[],
+  hookInstalled: boolean,
+): readonly DiagnosticIssue[] {
+  if (!hookInstalled) return [...issues]
+
+  const DOWNGRADE_CODES: ReadonlySet<string> = new Set([
+    'CROSS_TOOL_BYPASS',
+    'PREFIX_BYPASS_RISK',
+  ])
+
+  return issues.map(issue => {
+    if (!DOWNGRADE_CODES.has(issue.code)) return { ...issue }
+
+    return {
+      ...issue,
+      severity: 'info' as const,
+      fix: 'Layer 2 enforce フックがインストール済みのため、ランタイムで保護されています',
+    }
+  })
 }
 
 export async function runDiagnose(): Promise<DiagnoseResult> {
@@ -52,8 +82,17 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
     ),
   ]
 
+  // Check if Layer 2 enforce hook is installed
+  const hookPath = join(getHooksDir(), 'enforce-permissions.sh')
+  const hookInstalled = existsSync(hookPath) ||
+    (settings.PreToolUse ?? []).some(rule =>
+      rule.hooks.some(h => h.command.includes('enforce-permissions'))
+    )
+
+  const adjustedIssues = downgradeIfHookInstalled(allIssues, hookInstalled)
+
   const severityOrder = { critical: 0, warning: 1, info: 2 }
-  const sorted = [...allIssues].sort(
+  const sorted = [...adjustedIssues].sort(
     (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
   )
 
