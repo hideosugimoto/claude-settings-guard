@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-792%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-806%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -160,7 +160,7 @@ csg enforce --dry-run
 
 3つのプリセットから選択できます。各プロファイルは基本 deny ルール（sudo, su, rm -rf, eval, base64, .env, secrets）を含みます。
 
-全プロファイル共通で、取り消しが困難なコマンド（git push, git reset --hard, npm publish 等）は `ask` に設定され、実行前に確認を求めます。
+全プロファイル共通で、取り消しが困難なコマンド（git push, git reset --hard, npm/pnpm/yarn/bun/cargo publish 等）は `ask` に設定され、実行前に確認を求めます。危険な chmod（777, +s）は deny に設定されます。
 
 #### minimal（速度重視）
 
@@ -168,9 +168,9 @@ csg enforce --dry-run
 
 | 設定 | 内容 |
 |------|------|
-| deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
-| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (ベア `Bash` は ask 競合により自動除去) |
-| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)` 等 11 ルール |
+| deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Bash(chmod 777 *)`, `Bash(chmod +s *)` |
+| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (ベア `Bash` は ask 競合により自動除去、安全なサブコマンドで補償) |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, `Bash(pnpm publish *)` 等 21 ルール |
 | フック | enforce-permissions のみ |
 
 #### balanced（推奨デフォルト）
@@ -181,7 +181,7 @@ csg enforce --dry-run
 |------|------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 11 ルール |
+| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 21 ルール |
 | フック | enforce-permissions のみ |
 
 #### strict（セキュリティ重視）
@@ -192,7 +192,7 @@ csg enforce --dry-run
 |------|------|
 | deny | 上記 + `Bash(curl *)`, `Bash(wget *)`, `Bash(eval *)`, `Bash(base64 *)`, `Write(**/.env)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 11 ルール + インフラ系 7 ルール (`ssh`, `kubectl`, `terraform` 等) |
+| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 21 ルール + インフラ系 7 ルール (`ssh`, `kubectl`, `terraform` 等) |
 | フック | enforce-permissions + 起動時自動診断 |
 
 ---
@@ -246,17 +246,23 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 
 | 競合パターン | 問題 | csg の対処 |
 |---|---|---|
-| ベア `Bash` + `Bash(...)` ask | **全 Bash ask ルールが無効化される** | ベアツール名を allow から自動除去 |
+| ベア `Bash` + `Bash(...)` ask | **全 Bash ask ルールが無効化される** | ベアツール名を allow から自動除去、安全なサブコマンドで補償 |
 | allow + deny に同じルール | 冗長（deny が勝つが将来変更リスク） | allow から自動除去 |
 | allow + ask に同じルール | **ask が無効化される**（allow が優先） | allow から自動除去 |
+| 広い allow が特定の ask/deny をオーバーライド | **`Bash(npm *)` が `Bash(npm publish *)` を無効化** | プレフィックスマッチで検出し allow から自動除去 |
 
 ```
 例1: ベア Bash が allow にあり、ask に Bash(git push *) がある
   → allow からベア Bash を自動除去
+  → 安全なコマンド (git commit, npm install 等) は個別パターンで補償
   → git push 時に Claude が確認を求めるようになる
 
 例2: Bash(git push *) が allow と ask の両方にある
   → allow から自動除去し、ask のみに残す
+
+例3: Bash(npm *) が allow にあり、ask に Bash(npm publish *) がある
+  → 広い Bash(npm *) を allow から自動除去
+  → npm install, npm run 等の安全なサブコマンドは個別に allow に追加
 ```
 
 `csg diagnose` でも `BARE_TOOL_OVERRIDE` / `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` として検出・警告します。
@@ -325,7 +331,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (33 files, 792 tests)
+npm test               # テスト実行 (34 files, 806 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -515,7 +521,7 @@ csg enforce --dry-run
 
 Choose from 3 presets. Each profile includes foundational deny rules (sudo, su, rm -rf, eval, base64, .env, secrets).
 
-All profiles include `ask` rules for hard-to-reverse commands (git push, git reset --hard, npm publish, etc.) that require confirmation before execution.
+All profiles include `ask` rules for hard-to-reverse commands (git push, git reset --hard, npm/pnpm/yarn/bun/cargo publish, etc.) that require confirmation before execution. Dangerous chmod operations (777, +s) are denied.
 
 #### minimal (Speed-Focused)
 
@@ -523,9 +529,9 @@ Auto-allows most tools. For users who want minimal confirmation prompts.
 
 | Setting | Content |
 |---------|---------|
-| deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
-| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (bare `Bash` auto-removed due to ask conflict) |
-| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, etc. (11 rules) |
+| deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Bash(chmod 777 *)`, `Bash(chmod +s *)` |
+| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (bare `Bash` auto-removed due to ask conflict, compensated with safe subcommands) |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, `Bash(pnpm publish *)`, etc. (21 rules) |
 | hooks | enforce-permissions only |
 
 #### balanced (Recommended Default)
@@ -536,7 +542,7 @@ Auto-allows reads, requires confirmation for writes/execution.
 |---------|---------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` + hard-to-reverse commands (11 rules) |
+| ask | `Bash`, `Edit`, `Write` + hard-to-reverse commands (21 rules) |
 | hooks | enforce-permissions only |
 
 #### strict (Security-Focused)
@@ -547,7 +553,7 @@ Blocks network commands. For security-critical environments.
 |---------|---------|
 | deny | All above + `Bash(curl *)`, `Bash(wget *)`, `Bash(eval *)`, `Bash(base64 *)`, `Write(**/.env)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` + hard-to-reverse (11 rules) + infra commands (7 rules: `ssh`, `kubectl`, `terraform`, etc.) |
+| ask | `Bash`, `Edit`, `Write` + hard-to-reverse (21 rules) + infra commands (7 rules: `ssh`, `kubectl`, `terraform`, etc.) |
 | hooks | enforce-permissions + startup auto-diagnostics |
 
 ---
@@ -601,17 +607,23 @@ When applying a profile via `csg setup` / `csg init`, allow rules that conflict 
 
 | Conflict | Problem | csg Action |
 |----------|---------|------------|
-| Bare `Bash` + `Bash(...)` ask | **All Bash ask rules silently ignored** | Auto-remove bare tool from allow |
+| Bare `Bash` + `Bash(...)` ask | **All Bash ask rules silently ignored** | Auto-remove bare tool from allow, compensate with safe subcommands |
 | allow + deny overlap | Redundant (deny wins, but risky if behavior changes) | Auto-remove from allow |
 | allow + ask overlap | **ask is silently ignored** (allow takes priority) | Auto-remove from allow |
+| Broad allow overrides specific ask/deny | **`Bash(npm *)` overrides `Bash(npm publish *)`** | Prefix-match detection, auto-remove from allow |
 
 ```
 Example 1: Bare "Bash" in allow with Bash(git push *) in ask
   → Bare "Bash" auto-removed from allow
+  → Safe commands (git commit, npm install, etc.) compensated with individual patterns
   → Claude now asks for confirmation before git push
 
 Example 2: Bash(git push *) in both allow and ask
   → Auto-removed from allow, kept in ask
+
+Example 3: Bash(npm *) in allow with Bash(npm publish *) in ask
+  → Broad Bash(npm *) auto-removed from allow
+  → Safe subcommands (npm install, npm run, etc.) individually added to allow
 ```
 
 `csg diagnose` detects these as `BARE_TOOL_OVERRIDE` / `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT`.
@@ -680,7 +692,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (33 files, 792 tests)
+npm test               # Run tests (34 files, 806 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
