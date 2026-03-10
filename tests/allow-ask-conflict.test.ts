@@ -58,18 +58,15 @@ describe('applyProfileToSettings: allow/ask conflict resolution', () => {
     expect(result.settings.permissions!.ask).toContain('Bash(git push *)')
   })
 
-  it('handles Bash(git stash *) matching ask Bash(git stash drop *)', () => {
-    // Bash(git stash *) is broader than Bash(git stash drop *)
-    // Only exact matches should be removed
+  it('removes broad Bash(git stash *) that overrides ask Bash(git stash drop *)', () => {
     const settings: ClaudeSettings = {
       permissions: {
         allow: ['Bash(git stash *)'],
       },
     }
     const result = applyProfileToSettings(settings, minimalProfile)
-    // git stash * is broader than git stash drop *, so it stays in allow
-    // Only exact matches are removed
-    expect(result.settings.permissions!.allow).toContain('Bash(git stash *)')
+    // Broad pattern overrides specific ask rule, so it must be removed
+    expect(result.settings.permissions!.allow).not.toContain('Bash(git stash *)')
   })
 
   it('removes allow rules that match strict-only ask rules', () => {
@@ -82,6 +79,67 @@ describe('applyProfileToSettings: allow/ask conflict resolution', () => {
     expect(result.settings.permissions!.allow).not.toContain('Bash(ssh *)')
     expect(result.settings.permissions!.allow).not.toContain('Bash(kubectl delete *)')
     expect(result.settings.permissions!.allow).toContain('Read')
+  })
+
+  it('removes broad allow patterns that override specific ask rules', () => {
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: [
+          'Bash(npm *)',        // overrides Bash(npm publish *)
+          'Bash(git branch *)', // overrides Bash(git branch -D *)
+          'Bash(git reset *)',  // overrides Bash(git reset --hard *)
+          'Bash(git clean *)',  // overrides Bash(git clean -f *)
+          'Read',
+        ],
+      },
+    }
+    const result = applyProfileToSettings(settings, minimalProfile)
+    expect(result.settings.permissions!.allow).not.toContain('Bash(npm *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(git branch *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(git reset *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(git clean *)')
+    expect(result.settings.permissions!.allow).toContain('Read')
+  })
+
+  it('removes broad allow patterns that override deny rules', () => {
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: ['Bash(chmod *)', 'Read'],
+      },
+    }
+    const result = applyProfileToSettings(settings, minimalProfile)
+    // Bash(chmod *) overrides deny Bash(chmod 777 *) and Bash(chmod +s *)
+    expect(result.settings.permissions!.allow).not.toContain('Bash(chmod *)')
+    expect(result.settings.permissions!.allow).toContain('Read')
+  })
+
+  it('removes broad package manager patterns that override publish ask rules', () => {
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: [
+          'Bash(pnpm *)',
+          'Bash(yarn *)',
+          'Bash(bun *)',
+          'Bash(cargo *)',
+        ],
+      },
+    }
+    const result = applyProfileToSettings(settings, minimalProfile)
+    expect(result.settings.permissions!.allow).not.toContain('Bash(pnpm *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(yarn *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(bun *)')
+    expect(result.settings.permissions!.allow).not.toContain('Bash(cargo *)')
+  })
+
+  it('keeps safe specific patterns that do not override ask/deny', () => {
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: ['Bash(npm install *)', 'Bash(git branch -d *)'],
+      },
+    }
+    const result = applyProfileToSettings(settings, minimalProfile)
+    expect(result.settings.permissions!.allow).toContain('Bash(npm install *)')
+    expect(result.settings.permissions!.allow).toContain('Bash(git branch -d *)')
   })
 
   it('preserves original settings immutability', () => {

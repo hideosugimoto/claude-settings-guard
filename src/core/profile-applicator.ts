@@ -111,10 +111,28 @@ export function applyProfileToSettings(
     ? SAFE_BASH_ALLOW_RULES.filter(rule => !askSet.has(rule) && !denySet.has(rule))
     : []
 
-  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask
+  // Build a function to check if an allow rule is a broad pattern that
+  // could override a more specific ask or deny rule.
+  // e.g., "Bash(npm *)" in allow overrides "Bash(npm publish *)" in ask
+  // e.g., "Bash(chmod *)" in allow overrides "Bash(chmod 777 *)" in deny
+  const isBroadPatternOverridingAskOrDeny = (rule: string): boolean => {
+    const match = rule.match(/^(\w+)\((.+)\s\*\)$/)
+    if (!match) return false
+    const [, tool, prefix] = match
+    const rulePrefix = `${tool}(${prefix} `
+    return [...askSet, ...denySet].some(protectedRule =>
+      protectedRule.startsWith(rulePrefix) && protectedRule !== rule
+    )
+  }
+
+  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask,
+  // or are broad patterns that could override more specific ask/deny rules
   const mergedAllow = [...existingAllow, ...missingAllow, ...compensateRules]
   const cleanedAllow = [...new Set(mergedAllow)].filter(rule =>
-    !askSet.has(rule) && !denySet.has(rule) && !bareToolsOverridingAsk.has(rule)
+    !askSet.has(rule) &&
+    !denySet.has(rule) &&
+    !bareToolsOverridingAsk.has(rule) &&
+    !isBroadPatternOverridingAskOrDeny(rule)
   )
   const removedFromAllow = mergedAllow.length - cleanedAllow.length
 
