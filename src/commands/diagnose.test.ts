@@ -37,6 +37,7 @@ vi.mock('../core/pattern-validator.js', () => ({
 import { runDiagnose } from './diagnose.js'
 import { isJqAvailable } from '../utils/jq-check.js'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
+import { createMockExtractAllRules, createMockSettingsWithEnforceHook } from '../../tests/helpers/mock-factories.js'
 
 const mockedIsJqAvailable = vi.mocked(isJqAvailable)
 const mockedReadGlobalSettings = vi.mocked(readGlobalSettings)
@@ -49,20 +50,8 @@ describe('runDiagnose jq check', () => {
 
   it('includes JQ_NOT_FOUND issue when jq is not available and enforce hook is registered', async () => {
     mockedIsJqAvailable.mockReturnValue(false)
-    mockedReadGlobalSettings.mockResolvedValue({
-      PreToolUse: [{
-        matcher: 'Bash',
-        hooks: [{ type: 'command', command: '/tmp/hooks/enforce-permissions.sh' }],
-      }],
-      permissions: { deny: ['Bash(rm *)'] },
-    })
-    mockedExtractAllRules.mockReturnValue({
-      allowRules: [],
-      denyRules: ['Bash(rm *)'],
-      askRules: [],
-      legacyAllowedTools: [],
-      legacyDeny: [],
-    })
+    mockedReadGlobalSettings.mockResolvedValue(createMockSettingsWithEnforceHook())
+    mockedExtractAllRules.mockReturnValue(createMockExtractAllRules())
 
     const result = await runDiagnose()
 
@@ -74,20 +63,8 @@ describe('runDiagnose jq check', () => {
 
   it('does not include JQ_NOT_FOUND issue when jq is available', async () => {
     mockedIsJqAvailable.mockReturnValue(true)
-    mockedReadGlobalSettings.mockResolvedValue({
-      PreToolUse: [{
-        matcher: 'Bash',
-        hooks: [{ type: 'command', command: '/tmp/hooks/enforce-permissions.sh' }],
-      }],
-      permissions: { deny: ['Bash(rm *)'] },
-    })
-    mockedExtractAllRules.mockReturnValue({
-      allowRules: [],
-      denyRules: ['Bash(rm *)'],
-      askRules: [],
-      legacyAllowedTools: [],
-      legacyDeny: [],
-    })
+    mockedReadGlobalSettings.mockResolvedValue(createMockSettingsWithEnforceHook())
+    mockedExtractAllRules.mockReturnValue(createMockExtractAllRules())
 
     const result = await runDiagnose()
 

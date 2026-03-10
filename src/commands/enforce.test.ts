@@ -41,6 +41,7 @@ import { enforceCommand } from './enforce.js'
 import { isJqAvailable } from '../utils/jq-check.js'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
 import { printWarning } from '../utils/display.js'
+import { createMockExtractAllRules } from '../../tests/helpers/mock-factories.js'
 
 const mockedIsJqAvailable = vi.mocked(isJqAvailable)
 const mockedReadGlobalSettings = vi.mocked(readGlobalSettings)
@@ -61,13 +62,7 @@ describe('enforceCommand jq check', () => {
     mockedReadGlobalSettings.mockResolvedValue({
       permissions: { deny: ['Bash(rm *)'] },
     })
-    mockedExtractAllRules.mockReturnValue({
-      allowRules: [],
-      denyRules: ['Bash(rm *)'],
-      askRules: [],
-      legacyAllowedTools: [],
-      legacyDeny: [],
-    })
+    mockedExtractAllRules.mockReturnValue(createMockExtractAllRules())
 
     await enforceCommand({ dryRun: true })
 
@@ -81,13 +76,7 @@ describe('enforceCommand jq check', () => {
     mockedReadGlobalSettings.mockResolvedValue({
       permissions: { deny: ['Bash(rm *)'] },
     })
-    mockedExtractAllRules.mockReturnValue({
-      allowRules: [],
-      denyRules: ['Bash(rm *)'],
-      askRules: [],
-      legacyAllowedTools: [],
-      legacyDeny: [],
-    })
+    mockedExtractAllRules.mockReturnValue(createMockExtractAllRules())
 
     await enforceCommand({ dryRun: true })
 

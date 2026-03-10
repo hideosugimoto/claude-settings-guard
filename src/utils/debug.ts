@@ -8,6 +8,10 @@ export function isDebugEnabled(): boolean {
   return _debugEnabled || process.env.CSG_DEBUG === '1'
 }
 
+export function resetDebug(): void {
+  _debugEnabled = false
+}
+
 export function debug(message: string): void {
   if (isDebugEnabled()) {
     process.stderr.write(`[CSG DEBUG] ${message}\n`)

@@ -28,13 +28,6 @@ export async function writeSettings(
   debug(`Writing settings to ${filePath}`)
   const json = JSON.stringify(settings, null, 2) + '\n'
 
-  // Verify it's valid JSON by round-tripping
-  try {
-    JSON.parse(json)
-  } catch {
-    return { success: false, error: 'Generated JSON is invalid' }
-  }
-
   if (options.dryRun) {
     return { success: true }
   }

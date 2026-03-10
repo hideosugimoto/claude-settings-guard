@@ -46,7 +46,20 @@ export interface PermissionRule {
 }
 
 export type Severity = 'critical' | 'warning' | 'info'
-export type IssueCode = 'LEGACY_SYNTAX' | 'STRUCTURE_ISSUE' | 'CONFLICT' | 'ALLOW_ASK_CONFLICT' | 'ALLOW_DENY_CONFLICT' | 'BARE_TOOL_OVERRIDE' | 'INVALID_TOOL' | 'INVALID_PATTERN' | 'PIPE_VULNERABLE' | 'MISSING_PAIRED_DENY' | 'CROSS_TOOL_BYPASS' | 'PREFIX_BYPASS_RISK' | 'JQ_NOT_FOUND'
+export type IssueCode =
+  | 'LEGACY_SYNTAX'
+  | 'STRUCTURE_ISSUE'
+  | 'CONFLICT'
+  | 'ALLOW_ASK_CONFLICT'
+  | 'ALLOW_DENY_CONFLICT'
+  | 'BARE_TOOL_OVERRIDE'
+  | 'INVALID_TOOL'
+  | 'INVALID_PATTERN'
+  | 'PIPE_VULNERABLE'
+  | 'MISSING_PAIRED_DENY'
+  | 'CROSS_TOOL_BYPASS'
+  | 'PREFIX_BYPASS_RISK'
+  | 'JQ_NOT_FOUND'
 
 export interface DiagnosticIssue {
   readonly severity: Severity

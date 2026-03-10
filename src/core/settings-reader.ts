@@ -3,30 +3,56 @@ import { claudeSettingsSchema, type ClaudeSettings, type SettingsLayer } from '.
 import { getGlobalSettingsPath, getLocalSettingsPath, getProjectSettingsPath } from '../utils/paths.js'
 import { debug } from '../utils/debug.js'
 
-export async function readSettingsFile(filePath: string): Promise<ClaudeSettings | null> {
+export type SettingsReadStatus = 'ok' | 'not_found' | 'parse_error' | 'schema_error'
+
+export interface SettingsReadResult {
+  readonly status: SettingsReadStatus
+  readonly settings: ClaudeSettings | null
+  readonly error?: string
+}
+
+export async function readSettingsFileWithStatus(filePath: string): Promise<SettingsReadResult> {
   debug(`Reading settings from ${filePath}`)
   let raw: string
   try {
     raw = await readFile(filePath, 'utf-8')
   } catch (err: unknown) {
     if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null
+      return { status: 'not_found', settings: null }
     }
     throw err
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
-  } catch {
-    process.stderr.write(`Warning: failed to parse ${filePath} as JSON, skipping\n`)
-    return null
+  } catch (err) {
+    return {
+      status: 'parse_error',
+      settings: null,
+      error: `Failed to parse JSON: ${err instanceof Error ? err.message : String(err)}`,
+    }
   }
   try {
-    return claudeSettingsSchema.parse(parsed)
-  } catch {
-    process.stderr.write(`Warning: invalid settings schema in ${filePath}, skipping\n`)
-    return null
+    const settings = claudeSettingsSchema.parse(parsed)
+    return { status: 'ok', settings }
+  } catch (err) {
+    return {
+      status: 'schema_error',
+      settings: null,
+      error: `Invalid schema: ${err instanceof Error ? err.message : String(err)}`,
+    }
   }
+}
+
+export async function readSettingsFile(filePath: string): Promise<ClaudeSettings | null> {
+  const result = await readSettingsFileWithStatus(filePath)
+  if (result.status === 'parse_error') {
+    process.stderr.write(`Warning: failed to parse ${filePath} as JSON, skipping\n`)
+  }
+  if (result.status === 'schema_error') {
+    process.stderr.write(`Warning: invalid settings schema in ${filePath}, skipping\n`)
+  }
+  return result.settings
 }
 
 export async function readGlobalSettings(): Promise<ClaudeSettings | null> {

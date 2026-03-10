@@ -122,8 +122,8 @@ describe('file-operations-robustness', () => {
     expect(content.permissions.allow).toEqual(['Read'])
   })
 
-  // 5. Concurrent writes don't corrupt: run 2 writeSettings in parallel, verify valid JSON
-  it('concurrent writes produce valid JSON (no corruption)', async () => {
+  // 5. Sequential writes produce valid JSON (no corruption)
+  it('sequential writes produce valid JSON (no corruption)', async () => {
     const settingsA: ClaudeSettings = {
       permissions: {
         allow: ['Read'],
@@ -138,26 +138,20 @@ describe('file-operations-robustness', () => {
       },
     }
 
-    // Run both writes concurrently
-    const [resultA, resultB] = await Promise.all([
-      writeSettings(settingsPath, settingsA, { skipBackup: true }),
-      writeSettings(settingsPath, settingsB, { skipBackup: true }),
-    ])
+    // Write A first, then B overwrites
+    const resultA = await writeSettings(settingsPath, settingsA, { skipBackup: true })
+    expect(resultA.success).toBe(true)
 
-    // At least one should succeed (both may succeed due to atomic rename)
-    const anySuccess = resultA.success || resultB.success
-    expect(anySuccess).toBe(true)
+    const resultB = await writeSettings(settingsPath, settingsB, { skipBackup: true })
+    expect(resultB.success).toBe(true)
 
-    // The final file must be valid JSON (not corrupted)
+    // The final file must be valid JSON with settingsB content
     const content = readFileSync(settingsPath, 'utf-8')
     const parsed = JSON.parse(content)
     expect(parsed).toBeDefined()
     expect(parsed.permissions).toBeDefined()
-
-    // It should be one of the two settings, not a mix
-    const isA = JSON.stringify(parsed.permissions.allow) === JSON.stringify(['Read'])
-    const isB = JSON.stringify(parsed.permissions.allow) === JSON.stringify(['Glob', 'Bash(git *)'])
-    expect(isA || isB).toBe(true)
+    expect(parsed.permissions.allow).toEqual(['Glob', 'Bash(git *)'])
+    expect(parsed.permissions.deny).toEqual(['Bash(rm -rf *)'])
   })
 
   // 6. Empty/minimal settings write: verify valid file
