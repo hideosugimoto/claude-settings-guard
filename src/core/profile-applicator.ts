@@ -1,5 +1,5 @@
 import type { ClaudeSettings, Profile } from '../types.js'
-import { DEFAULT_DENY_RULES, FILE_READ_COMMANDS, FILE_WRITE_COMMANDS } from '../constants.js'
+import { DEFAULT_DENY_RULES, FILE_READ_COMMANDS, FILE_WRITE_COMMANDS, SAFE_BASH_ALLOW_RULES } from '../constants.js'
 
 export interface ApplyProfileResult {
   readonly settings: ClaudeSettings
@@ -102,11 +102,18 @@ export function applyProfileToSettings(
       : []
   )
 
-  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask
+  // Sets for filtering
   const askSet = new Set(finalAsk)
   const denySet = new Set(finalDeny)
-  const mergedAllow = [...existingAllow, ...missingAllow]
-  const cleanedAllow = mergedAllow.filter(rule =>
+
+  // Compensate: when bare "Bash" is removed, add safe Bash patterns
+  const compensateRules = bareToolsOverridingAsk.has('Bash')
+    ? SAFE_BASH_ALLOW_RULES.filter(rule => !askSet.has(rule) && !denySet.has(rule))
+    : []
+
+  // Remove allow rules that conflict with ask, deny, or are bare tools overriding ask
+  const mergedAllow = [...existingAllow, ...missingAllow, ...compensateRules]
+  const cleanedAllow = [...new Set(mergedAllow)].filter(rule =>
     !askSet.has(rule) && !denySet.has(rule) && !bareToolsOverridingAsk.has(rule)
   )
   const removedFromAllow = mergedAllow.length - cleanedAllow.length

@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-777%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-792%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -169,7 +169,7 @@ csg enforce --dry-run
 | 設定 | 内容 |
 |------|------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
-| allow | `Read`, `Edit`, `Write`, `Bash`, `Glob`, `Grep` |
+| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (ベア `Bash` は ask 競合により自動除去) |
 | ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)` 等 11 ルール |
 | フック | enforce-permissions のみ |
 
@@ -228,6 +228,7 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | コード | 重要度 | 内容 |
 |--------|--------|------|
 | `LEGACY_SYNTAX` | CRITICAL | コロン構文 `Tool(arg:*)` の使用 |
+| `BARE_TOOL_OVERRIDE` | CRITICAL | ベアツール名（例: `Bash`）が ask パターンを無効化 |
 | `STRUCTURE_ISSUE` | WARNING | トップレベルの `deny`/`allowedTools` |
 | `INVALID_TOOL` | WARNING | 未知のツール名 |
 | `CONFLICT` | WARNING | allow と deny の競合 |
@@ -245,16 +246,20 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 
 | 競合パターン | 問題 | csg の対処 |
 |---|---|---|
+| ベア `Bash` + `Bash(...)` ask | **全 Bash ask ルールが無効化される** | ベアツール名を allow から自動除去 |
 | allow + deny に同じルール | 冗長（deny が勝つが将来変更リスク） | allow から自動除去 |
 | allow + ask に同じルール | **ask が無効化される**（allow が優先） | allow から自動除去 |
 
 ```
-例: Bash(git push *) が allow と ask の両方にある
+例1: ベア Bash が allow にあり、ask に Bash(git push *) がある
+  → allow からベア Bash を自動除去
+  → git push 時に Claude が確認を求めるようになる
+
+例2: Bash(git push *) が allow と ask の両方にある
   → allow から自動除去し、ask のみに残す
-  → Claude が git push 前に確認を求めるようになる
 ```
 
-`csg diagnose` でも `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` として検出・警告します。
+`csg diagnose` でも `BARE_TOOL_OVERRIDE` / `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` として検出・警告します。
 
 ### テレメトリ推薦
 
@@ -320,7 +325,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (32 files, 777 tests)
+npm test               # テスト実行 (33 files, 792 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -519,7 +524,7 @@ Auto-allows most tools. For users who want minimal confirmation prompts.
 | Setting | Content |
 |---------|---------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
-| allow | `Read`, `Edit`, `Write`, `Bash`, `Glob`, `Grep` |
+| allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (bare `Bash` auto-removed due to ask conflict) |
 | ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, etc. (11 rules) |
 | hooks | enforce-permissions only |
 
@@ -578,6 +583,7 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | Code | Severity | Description |
 |------|----------|-------------|
 | `LEGACY_SYNTAX` | CRITICAL | Colon syntax `Tool(arg:*)` detected |
+| `BARE_TOOL_OVERRIDE` | CRITICAL | Bare tool name (e.g. `Bash`) overrides ask patterns |
 | `STRUCTURE_ISSUE` | WARNING | Top-level `deny`/`allowedTools` found |
 | `INVALID_TOOL` | WARNING | Unknown tool name |
 | `CONFLICT` | WARNING | Pattern in both allow and deny |
@@ -595,16 +601,20 @@ When applying a profile via `csg setup` / `csg init`, allow rules that conflict 
 
 | Conflict | Problem | csg Action |
 |----------|---------|------------|
+| Bare `Bash` + `Bash(...)` ask | **All Bash ask rules silently ignored** | Auto-remove bare tool from allow |
 | allow + deny overlap | Redundant (deny wins, but risky if behavior changes) | Auto-remove from allow |
 | allow + ask overlap | **ask is silently ignored** (allow takes priority) | Auto-remove from allow |
 
 ```
-Example: Bash(git push *) in both allow and ask
-  → Auto-removed from allow, kept in ask
+Example 1: Bare "Bash" in allow with Bash(git push *) in ask
+  → Bare "Bash" auto-removed from allow
   → Claude now asks for confirmation before git push
+
+Example 2: Bash(git push *) in both allow and ask
+  → Auto-removed from allow, kept in ask
 ```
 
-`csg diagnose` also detects these as `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` warnings.
+`csg diagnose` detects these as `BARE_TOOL_OVERRIDE` / `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT`.
 
 ### Telemetry Recommendations
 
@@ -670,7 +680,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (32 files, 777 tests)
+npm test               # Run tests (33 files, 792 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
