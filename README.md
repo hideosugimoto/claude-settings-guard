@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-356%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-777%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -158,7 +158,9 @@ csg enforce --dry-run
 
 ### プロファイル
 
-3つのプリセットから選択できます。各プロファイルは基本 deny ルール（sudo, rm -rf, .env, secrets）を含みます。
+3つのプリセットから選択できます。各プロファイルは基本 deny ルール（sudo, su, rm -rf, eval, base64, .env, secrets）を含みます。
+
+全プロファイル共通で、取り消しが困難なコマンド（git push, git reset --hard, npm publish 等）は `ask` に設定され、実行前に確認を求めます。
 
 #### minimal（速度重視）
 
@@ -168,7 +170,7 @@ csg enforce --dry-run
 |------|------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
 | allow | `Read`, `Edit`, `Write`, `Bash`, `Glob`, `Grep` |
-| ask | なし |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)` 等 11 ルール |
 | フック | enforce-permissions のみ |
 
 #### balanced（推奨デフォルト）
@@ -179,7 +181,7 @@ csg enforce --dry-run
 |------|------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` |
+| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 11 ルール |
 | フック | enforce-permissions のみ |
 
 #### strict（セキュリティ重視）
@@ -188,9 +190,9 @@ csg enforce --dry-run
 
 | 設定 | 内容 |
 |------|------|
-| deny | 上記 + `Bash(curl *)`, `Bash(wget *)`, `Write(**/.env)` |
+| deny | 上記 + `Bash(curl *)`, `Bash(wget *)`, `Bash(eval *)`, `Bash(base64 *)`, `Write(**/.env)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` |
+| ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 11 ルール + インフラ系 7 ルール (`ssh`, `kubectl`, `terraform` 等) |
 | フック | enforce-permissions + 起動時自動診断 |
 
 ---
@@ -229,8 +231,30 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | `STRUCTURE_ISSUE` | WARNING | トップレベルの `deny`/`allowedTools` |
 | `INVALID_TOOL` | WARNING | 未知のツール名 |
 | `CONFLICT` | WARNING | allow と deny の競合 |
+| `ALLOW_ASK_CONFLICT` | WARNING | allow と ask の競合（allow が優先され ask が無効化） |
+| `ALLOW_DENY_CONFLICT` | WARNING | allow と deny の重複（冗長、deny が優先） |
+| `CROSS_TOOL_BYPASS` | WARNING/INFO | Bash 経由のファイル deny バイパス（Layer 2 導入時は INFO に降格） |
+| `PREFIX_BYPASS_RISK` | WARNING/INFO | プレフィックスコマンドによる deny 回避リスク |
+| `MISSING_PAIRED_DENY` | WARNING | Read deny はあるが Write/Edit deny が未設定 |
 | `INVALID_PATTERN` | WARNING | パターン構文エラー |
 | `PIPE_VULNERABLE` | INFO | パイプによるバイパスの可能性 → Layer 2 で対処 |
+
+### 競合自動除去
+
+`csg setup` / `csg init` でプロファイル適用時、allow ルールが deny や ask と競合している場合、自動的に allow から除去します。
+
+| 競合パターン | 問題 | csg の対処 |
+|---|---|---|
+| allow + deny に同じルール | 冗長（deny が勝つが将来変更リスク） | allow から自動除去 |
+| allow + ask に同じルール | **ask が無効化される**（allow が優先） | allow から自動除去 |
+
+```
+例: Bash(git push *) が allow と ask の両方にある
+  → allow から自動除去し、ask のみに残す
+  → Claude が git push 前に確認を求めるようになる
+```
+
+`csg diagnose` でも `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` として検出・警告します。
 
 ### テレメトリ推薦
 
@@ -296,7 +320,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (19 files, 356 tests)
+npm test               # テスト実行 (32 files, 777 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -484,7 +508,9 @@ csg enforce --dry-run
 
 ### Profiles
 
-Choose from 3 presets. Each profile includes foundational deny rules (sudo, rm -rf, .env, secrets).
+Choose from 3 presets. Each profile includes foundational deny rules (sudo, su, rm -rf, eval, base64, .env, secrets).
+
+All profiles include `ask` rules for hard-to-reverse commands (git push, git reset --hard, npm publish, etc.) that require confirmation before execution.
 
 #### minimal (Speed-Focused)
 
@@ -494,7 +520,7 @@ Auto-allows most tools. For users who want minimal confirmation prompts.
 |---------|---------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)` |
 | allow | `Read`, `Edit`, `Write`, `Bash`, `Glob`, `Grep` |
-| ask | None |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, etc. (11 rules) |
 | hooks | enforce-permissions only |
 
 #### balanced (Recommended Default)
@@ -505,7 +531,7 @@ Auto-allows reads, requires confirmation for writes/execution.
 |---------|---------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` |
+| ask | `Bash`, `Edit`, `Write` + hard-to-reverse commands (11 rules) |
 | hooks | enforce-permissions only |
 
 #### strict (Security-Focused)
@@ -514,9 +540,9 @@ Blocks network commands. For security-critical environments.
 
 | Setting | Content |
 |---------|---------|
-| deny | All above + `Bash(curl *)`, `Bash(wget *)`, `Write(**/.env)` |
+| deny | All above + `Bash(curl *)`, `Bash(wget *)`, `Bash(eval *)`, `Bash(base64 *)`, `Write(**/.env)` |
 | allow | `Read`, `Glob`, `Grep` |
-| ask | `Bash`, `Edit`, `Write` |
+| ask | `Bash`, `Edit`, `Write` + hard-to-reverse (11 rules) + infra commands (7 rules: `ssh`, `kubectl`, `terraform`, etc.) |
 | hooks | enforce-permissions + startup auto-diagnostics |
 
 ---
@@ -555,8 +581,30 @@ npx claude-settings-guard diagnose --json --quiet || echo "Settings issues detec
 | `STRUCTURE_ISSUE` | WARNING | Top-level `deny`/`allowedTools` found |
 | `INVALID_TOOL` | WARNING | Unknown tool name |
 | `CONFLICT` | WARNING | Pattern in both allow and deny |
+| `ALLOW_ASK_CONFLICT` | WARNING | Pattern in both allow and ask (allow overrides, ask ignored) |
+| `ALLOW_DENY_CONFLICT` | WARNING | Pattern in both allow and deny (redundant, deny wins) |
+| `CROSS_TOOL_BYPASS` | WARNING/INFO | File deny bypass via Bash (downgraded to INFO when Layer 2 installed) |
+| `PREFIX_BYPASS_RISK` | WARNING/INFO | Deny evasion via prefix commands |
+| `MISSING_PAIRED_DENY` | WARNING | Read deny exists but Write/Edit deny missing |
 | `INVALID_PATTERN` | WARNING | Pattern syntax error |
 | `PIPE_VULNERABLE` | INFO | Pipe bypass risk → addressed by Layer 2 |
+
+### Conflict Auto-Resolution
+
+When applying a profile via `csg setup` / `csg init`, allow rules that conflict with deny or ask rules are automatically removed.
+
+| Conflict | Problem | csg Action |
+|----------|---------|------------|
+| allow + deny overlap | Redundant (deny wins, but risky if behavior changes) | Auto-remove from allow |
+| allow + ask overlap | **ask is silently ignored** (allow takes priority) | Auto-remove from allow |
+
+```
+Example: Bash(git push *) in both allow and ask
+  → Auto-removed from allow, kept in ask
+  → Claude now asks for confirmation before git push
+```
+
+`csg diagnose` also detects these as `ALLOW_ASK_CONFLICT` / `ALLOW_DENY_CONFLICT` warnings.
 
 ### Telemetry Recommendations
 
@@ -622,7 +670,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (19 files, 356 tests)
+npm test               # Run tests (32 files, 777 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
