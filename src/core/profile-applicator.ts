@@ -1,5 +1,6 @@
 import type { ClaudeSettings, Profile } from '../types.js'
 import { DEFAULT_DENY_RULES, FILE_READ_COMMANDS, FILE_WRITE_COMMANDS, SAFE_BASH_ALLOW_RULES } from '../constants.js'
+import { getAllProfileDenyRules } from '../profiles/index.js'
 
 export interface ApplyProfileResult {
   readonly settings: ClaudeSettings
@@ -96,19 +97,7 @@ export function applyProfileToSettings(
   const mergedDeny = [...new Set([...(settings.permissions?.deny ?? []), ...missingDeny])]
   const profileDenySet = new Set([...DEFAULT_DENY_RULES, ...profile.deny])
   // Also keep rules not from any known profile deny set (user-added custom rules)
-  const allProfileDenyRules = new Set([
-    ...DEFAULT_DENY_RULES,
-    // Import all profile deny rules to identify which are profile-managed
-    'Bash(sudo *)', 'Bash(su *)', 'Bash(rm -rf /*)', 'Bash(rm -rf ~*)',
-    'Bash(eval *)', 'Bash(base64 *)',
-    'Bash(chmod 777 *)', 'Bash(chmod +s *)', 'Bash(chmod u+s *)', 'Bash(chmod g+s *)',
-    'Bash(curl *)', 'Bash(wget *)',
-    'Read(**/.env)', 'Read(**/.env.*)', 'Read(**/secrets/**)',
-    'Read(**/*secret*)', 'Read(**/*credential*)', 'Read(**/*.secret)',
-    'Write(**/.env)', 'Write(**/.env.*)', 'Write(**/secrets/**)',
-    'Edit(**/.env)', 'Edit(**/.env.*)', 'Edit(**/secrets/**)',
-    'Grep(**/.env)', 'Grep(**/.env.*)', 'Grep(**/secrets/**)',
-  ])
+  const allProfileDenyRules = getAllProfileDenyRules()
   const finalDeny = mergedDeny.filter(rule =>
     profileDenySet.has(rule) || !allProfileDenyRules.has(rule)
   )

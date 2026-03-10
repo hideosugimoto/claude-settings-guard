@@ -13,6 +13,7 @@ import { groupStatsByPrefix } from '../core/pattern-grouper.js'
 import { detectProject } from '../core/project-detector.js'
 import { analyzeBypassRisks } from '../core/bypass-analyzer.js'
 import { getProfile, isValidProfileName, getProfileNames } from '../profiles/index.js'
+import { updateClaudeMd } from '../core/claude-md-updater.js'
 import { getGlobalSettingsPath, getLocalSettingsPath, getProjectSettingsPath } from '../utils/paths.js'
 import type { Profile, ClaudeSettings } from '../types.js'
 
@@ -263,9 +264,23 @@ export async function handleSetup(args: Record<string, unknown>): Promise<McpToo
 
   const profile: Profile = getProfile(profileName)
 
+  let claudeMdStatus: string
+  try {
+    const claudeMdResult = await updateClaudeMd()
+    const actionMessages: Record<string, string> = {
+      added: `CLAUDE.md にルールセクションを追加しました (${claudeMdResult.filePath})`,
+      updated: `CLAUDE.md のルールセクションを更新しました (${claudeMdResult.filePath})`,
+      skipped: `CLAUDE.md は変更なし（スキップ）`,
+    }
+    claudeMdStatus = actionMessages[claudeMdResult.action]
+  } catch {
+    claudeMdStatus = 'CLAUDE.md の更新に失敗しました'
+  }
+
   return textResult(
     `プロファイル "${profile.name}" を適用するには以下を実行してください:\n\n` +
     `npx claude-settings-guard init --profile ${profile.name}\n\n` +
-    'MCP ツールからの直接適用はセキュリティ上の理由で無効化されています。'
+    'MCP ツールからの直接適用はセキュリティ上の理由で無効化されています。\n\n' +
+    claudeMdStatus
   )
 }

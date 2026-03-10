@@ -1,4 +1,5 @@
 import type { Profile, ProfileName } from '../types.js'
+import { DEFAULT_DENY_RULES } from '../constants.js'
 import { minimalProfile } from './minimal.js'
 import { balancedProfile } from './balanced.js'
 import { strictProfile } from './strict.js'
@@ -19,4 +20,18 @@ export function getProfileNames(): readonly ProfileName[] {
 
 export function isValidProfileName(name: string): name is ProfileName {
   return name === 'minimal' || name === 'balanced' || name === 'strict'
+}
+
+/**
+ * Collect all deny rules from every profile plus DEFAULT_DENY_RULES.
+ * Used to identify which deny rules are "profile-managed" vs user-added custom rules.
+ */
+export function getAllProfileDenyRules(): ReadonlySet<string> {
+  const allRules = new Set<string>(DEFAULT_DENY_RULES)
+  for (const profile of Object.values(profiles)) {
+    for (const rule of profile.deny) {
+      allRules.add(rule)
+    }
+  }
+  return allRules
 }

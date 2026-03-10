@@ -5,7 +5,7 @@ import { runRecommend } from './recommend.js'
 import { initCommand } from './init.js'
 import { confirm, select } from '../utils/prompt.js'
 import { printHeader, printIssue, printMigration, printRecommendation, printSuccess, printWarning } from '../utils/display.js'
-import { getProfileNames, getProfile } from '../profiles/index.js'
+import { getProfileNames, getProfile, isValidProfileName } from '../profiles/index.js'
 import type { ClaudeSettings, ProfileName } from '../types.js'
 
 function countPatterns(settings: ClaudeSettings): number {
@@ -104,12 +104,14 @@ async function stepRecommend(): Promise<void> {
   process.stdout.write('\n')
 }
 
-async function stepProfileSelect(autoYes: boolean): Promise<ProfileName> {
+async function stepProfileSelect(autoYes: boolean, preferredProfile?: ProfileName): Promise<ProfileName> {
   printStepHeader(4, 'プロファイル選択')
 
+  const defaultProfile = preferredProfile ?? 'balanced'
+
   if (autoYes) {
-    process.stdout.write('プロファイル: balanced (デフォルト)\n\n')
-    return 'balanced'
+    process.stdout.write(`プロファイル: ${defaultProfile}${defaultProfile === 'balanced' ? ' (デフォルト)' : ''}\n\n`)
+    return defaultProfile
   }
 
   const profileNames = getProfileNames()
@@ -118,7 +120,7 @@ async function stepProfileSelect(autoYes: boolean): Promise<ProfileName> {
     const marker = name === 'balanced' ? chalk.green(' (推奨)') : ''
     process.stdout.write(`  ${chalk.bold(name)}${marker}: ${p.description}\n`)
   }
-  const chosen = await select('プロファイルを選択してください', [...profileNames], 'balanced')
+  const chosen = await select('プロファイルを選択してください', [...profileNames], defaultProfile)
   process.stdout.write('\n')
   return chosen as ProfileName
 }
@@ -150,16 +152,24 @@ function printSummary(): void {
   process.stdout.write('  csg init         - 初期セットアップ再実行\n')
 }
 
-export async function setupCommand(options: { yes?: boolean }): Promise<void> {
+export async function setupCommand(options: { yes?: boolean; profile?: string }): Promise<void> {
   printHeader('Claude Settings Guard - セットアップ')
   process.stdout.write('対話型ガイドで設定を最適化します。\n\n')
 
   const autoYes = options.yes ?? false
 
+  let preferredProfile: ProfileName | undefined
+  if (options.profile !== undefined) {
+    if (!isValidProfileName(options.profile)) {
+      throw new Error(`Invalid profile: '${options.profile}'. Valid profiles: ${getProfileNames().join(', ')}`)
+    }
+    preferredProfile = options.profile
+  }
+
   await stepDiagnose()
   await stepMigration(autoYes)
   await stepRecommend()
-  const selectedProfile = await stepProfileSelect(autoYes)
+  const selectedProfile = await stepProfileSelect(autoYes, preferredProfile)
   await stepInit(autoYes, selectedProfile)
   printSummary()
 }

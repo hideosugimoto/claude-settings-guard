@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { getProfile, getProfileNames, isValidProfileName, profiles } from '../src/profiles/index.js'
+import { getAllProfileDenyRules, getProfile, getProfileNames, isValidProfileName, profiles } from '../src/profiles/index.js'
 import { minimalProfile } from '../src/profiles/minimal.js'
 import { balancedProfile } from '../src/profiles/balanced.js'
 import { strictProfile } from '../src/profiles/strict.js'
+import { DEFAULT_DENY_RULES } from '../src/constants.js'
 import type { ProfileName } from '../src/types.js'
 
 describe('profiles', () => {
@@ -118,6 +119,55 @@ describe('profiles', () => {
 
     it('has more deny rules than balanced', () => {
       expect(strictProfile.deny.length).toBeGreaterThan(balancedProfile.deny.length)
+    })
+  })
+
+  describe('getAllProfileDenyRules', () => {
+    it('returns a Set containing all deny rules from every profile', () => {
+      const allRules = getAllProfileDenyRules()
+      const allNames: ProfileName[] = ['minimal', 'balanced', 'strict']
+
+      for (const name of allNames) {
+        const profile = getProfile(name)
+        for (const rule of profile.deny) {
+          expect(allRules.has(rule)).toBe(true)
+        }
+      }
+    })
+
+    it('includes DEFAULT_DENY_RULES', () => {
+      const allRules = getAllProfileDenyRules()
+
+      for (const rule of DEFAULT_DENY_RULES) {
+        expect(allRules.has(rule)).toBe(true)
+      }
+    })
+
+    it('returns a ReadonlySet (immutable)', () => {
+      const allRules = getAllProfileDenyRules()
+      expect(allRules).toBeInstanceOf(Set)
+    })
+
+    it('does not contain rules that are not in any profile or DEFAULT_DENY_RULES', () => {
+      const allRules = getAllProfileDenyRules()
+      expect(allRules.has('Bash(some-random-command *)')).toBe(false)
+    })
+
+    it('contains the union of all profile deny rules plus DEFAULT_DENY_RULES', () => {
+      const allRules = getAllProfileDenyRules()
+
+      // Build expected set manually
+      const expected = new Set<string>(DEFAULT_DENY_RULES)
+      for (const name of getProfileNames()) {
+        for (const rule of getProfile(name).deny) {
+          expected.add(rule)
+        }
+      }
+
+      expect(allRules.size).toBe(expected.size)
+      for (const rule of expected) {
+        expect(allRules.has(rule)).toBe(true)
+      }
     })
   })
 

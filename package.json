@@ -16,6 +16,7 @@
     "prepublishOnly": "npm run build",
     "start": "npx tsx src/index.ts",
     "test": "npx vitest run",
+    "test:badge": "npx tsx src/scripts/update-test-badge.ts",
     "test:watch": "npx vitest"
   },
   "dependencies": {

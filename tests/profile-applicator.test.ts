@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { applyProfileToSettings } from '../src/core/profile-applicator.js'
+import { getAllProfileDenyRules, profiles } from '../src/profiles/index.js'
+import { strictProfile } from '../src/profiles/strict.js'
+import { minimalProfile as realMinimalProfile } from '../src/profiles/minimal.js'
+import { DEFAULT_DENY_RULES } from '../src/constants.js'
 import type { ClaudeSettings, Profile } from '../src/types.js'
 
 const minimalProfile: Profile = {
@@ -206,6 +210,52 @@ describe('applyProfileToSettings', () => {
     const result = applyProfileToSettings(afterBalanced.settings, minimalLike)
 
     expect(result.removedFromAsk).toContain('Edit')
+  })
+
+  it('dynamically uses all profile deny rules for stale rule cleanup', () => {
+    // Apply strict profile first (has many deny rules)
+    const afterStrict = applyProfileToSettings({}, strictProfile)
+
+    // All strict deny rules should be present
+    for (const rule of strictProfile.deny) {
+      expect(afterStrict.settings.permissions?.deny).toContain(rule)
+    }
+
+    // Switch to real minimal profile — strict-only deny rules should be removed
+    const afterMinimal = applyProfileToSettings(afterStrict.settings, realMinimalProfile)
+
+    // Rules in strict but not in minimal AND not in DEFAULT_DENY_RULES should be removed
+    const defaultDenySet = new Set(DEFAULT_DENY_RULES)
+    const minimalDenySet = new Set([...realMinimalProfile.deny])
+    for (const rule of strictProfile.deny) {
+      if (!minimalDenySet.has(rule) && !defaultDenySet.has(rule)) {
+        expect(afterMinimal.settings.permissions?.deny).not.toContain(rule)
+      }
+    }
+
+    // Rules in DEFAULT_DENY_RULES should still be present regardless of profile
+    for (const rule of DEFAULT_DENY_RULES) {
+      expect(afterMinimal.settings.permissions?.deny).toContain(rule)
+    }
+  })
+
+  it('automatically recognizes new profile deny rules without hardcoding', () => {
+    // The allProfileDenyRules set should match exactly the union of
+    // all profiles' deny rules plus DEFAULT_DENY_RULES
+    const allRules = getAllProfileDenyRules()
+
+    const expected = new Set<string>(DEFAULT_DENY_RULES)
+    for (const profile of Object.values(profiles) as Profile[]) {
+      for (const rule of profile.deny) {
+        expected.add(rule)
+      }
+    }
+
+    // They should be identical — no hardcoded extras, no missing rules
+    expect(allRules.size).toBe(expected.size)
+    for (const rule of expected) {
+      expect(allRules.has(rule)).toBe(true)
+    }
   })
 
   it('keeps ask entries that are not in the new profile allow', () => {

@@ -15,9 +15,10 @@ program
   .description('Claude Settings Guard - settings.json 権限設定の診断・修正・補強ツール')
   .version(VERSION)
   .option('-y, --yes', '非対話モード (全ステップを自動実行)')
+  .option('--profile <name>', 'プロファイル (minimal, balanced, strict)')
   .action(async (opts) => {
     try {
-      await setupCommand({ yes: opts.yes })
+      await setupCommand({ yes: opts.yes, profile: opts.profile })
     } catch (err) {
       process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
       process.exit(1)
@@ -28,9 +29,10 @@ program
   .command('setup')
   .description('対話型ガイドセットアップ (デフォルト)')
   .option('-y, --yes', '非対話モード (全ステップを自動実行)')
+  .option('--profile <name>', 'プロファイル (minimal, balanced, strict)')
   .action(async (opts) => {
     try {
-      await setupCommand({ yes: opts.yes })
+      await setupCommand({ yes: opts.yes, profile: opts.profile })
     } catch (err) {
       process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
       process.exit(1)
@@ -95,9 +97,10 @@ program
   .description('初回セットアップ: スラッシュコマンドとフックを自動配置する')
   .option('--profile <name>', 'プロファイル (minimal, balanced, strict)', 'balanced')
   .option('--force', '既存のスラッシュコマンドを上書きする')
+  .option('--dry-run', '変更を適用せず、変更内容のみ表示する')
   .action(async (opts) => {
     try {
-      await initCommand({ profile: opts.profile, force: opts.force })
+      await initCommand({ profile: opts.profile, force: opts.force, dryRun: opts.dryRun })
     } catch (err) {
       process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`)
       process.exit(1)

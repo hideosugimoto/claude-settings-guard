@@ -13,6 +13,7 @@ import type { ProfileName } from '../types.js'
 export interface InitOptions {
   profile?: string
   force?: boolean
+  dryRun?: boolean
 }
 
 function resolveProfile(profileOption?: string): ProfileName {
@@ -20,27 +21,35 @@ function resolveProfile(profileOption?: string): ProfileName {
 }
 
 export async function initCommand(options: InitOptions = {}): Promise<void> {
+  const dryRun = options.dryRun === true
+  const prefix = dryRun ? '[DRY-RUN] ' : ''
+
   printHeader('Claude Settings Guard - 初期セットアップ')
 
-  process.stdout.write('スラッシュコマンドをデプロイ中...\n')
-  const deployResult = await deploySlashCommands({ force: options.force })
-  printDeployResult(deployResult)
+  if (!dryRun) {
+    process.stdout.write('スラッシュコマンドをデプロイ中...\n')
+    const deployResult = await deploySlashCommands({ force: options.force })
+    printDeployResult(deployResult)
 
-  try {
-    const claudeMdResult = await updateClaudeMd()
-    const messages: Record<string, string> = {
-      added: 'CLAUDE.md に Bash コマンドルールを追加しました',
-      updated: 'CLAUDE.md の Bash コマンドルールを更新しました',
-      skipped: 'CLAUDE.md の Bash コマンドルールは最新です',
+    try {
+      const claudeMdResult = await updateClaudeMd()
+      const messages: Record<string, string> = {
+        added: 'CLAUDE.md に Bash コマンドルールを追加しました',
+        updated: 'CLAUDE.md の Bash コマンドルールを更新しました',
+        skipped: 'CLAUDE.md の Bash コマンドルールは最新です',
+      }
+      printSuccess(messages[claudeMdResult.action])
+    } catch (error) {
+      printWarning(`CLAUDE.md の更新に失敗しました: ${(error as Error).message}`)
     }
-    printSuccess(messages[claudeMdResult.action])
-  } catch (error) {
-    printWarning(`CLAUDE.md の更新に失敗しました: ${(error as Error).message}`)
+  } else {
+    process.stdout.write(`${prefix}スラッシュコマンドのデプロイをスキップ\n`)
+    process.stdout.write(`${prefix}CLAUDE.md の更新をスキップ\n`)
   }
 
   const profileName = resolveProfile(options.profile)
   if (options.profile) {
-    process.stdout.write(`\nプロファイル: ${profileName}\n`)
+    process.stdout.write(`\n${prefix}プロファイル: ${profileName}\n`)
   }
 
   const profile = getProfile(profileName)
@@ -54,19 +63,19 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   // Show what was added
   if (applied.addedDeny > 0) {
-    process.stdout.write(`\ndeny ルールを追加 (${applied.addedDeny}件)\n`)
+    process.stdout.write(`\n${prefix}deny ルールを追加 (${applied.addedDeny}件)\n`)
   } else {
-    printSuccess('deny ルールは全て設定済みです')
+    printSuccess(`${prefix}deny ルールは全て設定済みです`)
   }
-  if (applied.addedAllow > 0) process.stdout.write(`allow ルールを追加 (${applied.addedAllow}件)\n`)
-  if (applied.addedAsk > 0) process.stdout.write(`ask ルールを追加 (${applied.addedAsk}件)\n`)
-  if (applied.removedFromAllow > 0) process.stdout.write(`allow 競合を解消: deny/ask と重複する ${applied.removedFromAllow}件を allow から除去\n`)
+  if (applied.addedAllow > 0) process.stdout.write(`${prefix}allow ルールを追加 (${applied.addedAllow}件)\n`)
+  if (applied.addedAsk > 0) process.stdout.write(`${prefix}ask ルールを追加 (${applied.addedAsk}件)\n`)
+  if (applied.removedFromAllow > 0) process.stdout.write(`${prefix}allow 競合を解消: deny/ask と重複する ${applied.removedFromAllow}件を allow から除去\n`)
 
   // Show what was removed (profile switch cleanup)
   const hasRemovals = applied.removedFromDeny.length > 0 || applied.removedFromAsk.length > 0
   if (hasRemovals) {
     process.stdout.write(`\n`)
-    printWarning('プロファイル切り替えにより、以前のプロファイルの設定が変更されました:')
+    printWarning(`${prefix}プロファイル切り替えにより、以前のプロファイルの設定が変更されました:`)
     if (applied.removedFromDeny.length > 0) {
       process.stdout.write(`  deny から除去 (${applied.removedFromDeny.length}件):\n`)
       for (const rule of applied.removedFromDeny) {
@@ -80,6 +89,11 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
       }
     }
     process.stdout.write(`  ※ バックアップから復元できます\n`)
+  }
+
+  if (dryRun) {
+    process.stdout.write(`\n${prefix}変更は適用されていません\n`)
+    return
   }
 
   const withEnforce = profile.hooks.enforce
