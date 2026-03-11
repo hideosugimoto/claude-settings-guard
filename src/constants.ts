@@ -332,5 +332,50 @@ export const SAFE_BASH_ALLOW_RULES: readonly string[] = [
   'Bash(tmux *)',
 ]
 
+// Read-only Bash commands: always safe, no file read/write side effects.
+// DO NOT include `env` (prefix bypass risk).
+export const READ_ONLY_BASH_SAFE: readonly string[] = [
+  'Bash(ls *)',
+  'Bash(find *)',
+  'Bash(wc *)',
+  'Bash(sort *)',
+  'Bash(uniq *)',
+  'Bash(diff *)',
+  'Bash(file *)',
+  'Bash(which *)',
+  'Bash(type *)',
+  'Bash(pwd)',
+  'Bash(date *)',
+  'Bash(whoami)',
+  'Bash(hostname)',
+  'Bash(uname *)',
+  'Bash(git status *)',
+  'Bash(git log *)',
+  'Bash(git diff *)',
+  'Bash(git branch *)',
+  'Bash(git show *)',
+  'Bash(git remote *)',
+  'Bash(git describe *)',
+  'Bash(git shortlog *)',
+  'Bash(git rev-parse *)',
+  'Bash(git ls-files *)',
+  'Bash(git reflog *)',
+  'Bash(git blame *)',
+]
+
+// File-reading Bash commands: can read file contents, may conflict with Read/Grep deny rules.
+// sed is also in FILE_WRITE_COMMANDS (sed -i can write).
+export const READ_ONLY_BASH_FILE_READERS: readonly string[] = [
+  'Bash(cat *)',
+  'Bash(head *)',
+  'Bash(tail *)',
+  'Bash(less *)',
+  'Bash(more *)',
+  'Bash(grep *)',
+  'Bash(awk *)',
+  'Bash(strings *)',
+  'Bash(sed *)',
+]
+
 export const RECOMMEND_ALLOW_THRESHOLD = 3
 export const RECOMMEND_DENY_THRESHOLD = 2

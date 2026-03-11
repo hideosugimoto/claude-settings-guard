@@ -1,6 +1,7 @@
 import type { ClaudeSettings, Profile } from '../types.js'
 import { DEFAULT_DENY_RULES, FILE_READ_COMMANDS, FILE_WRITE_COMMANDS, SAFE_BASH_ALLOW_RULES } from '../constants.js'
 import { getAllProfileDenyRules } from '../profiles/index.js'
+import { resolveReadOnlyBashRules } from './readonly-bash-resolver.js'
 
 export interface ApplyProfileResult {
   readonly settings: ClaudeSettings
@@ -12,6 +13,7 @@ export interface ApplyProfileResult {
   readonly removedFromAsk: readonly string[]
   readonly conflicts?: readonly string[]
   readonly crossToolConflicts?: readonly string[]
+  readonly readOnlyBashWarnings?: readonly string[]
 }
 
 function findMissing(
@@ -159,7 +161,17 @@ export function applyProfileToSettings(
   const missingDeny = findMissing(existingDeny, allDesiredDeny)
 
   const existingAllow = settings.permissions?.allow ?? []
-  const missingAllow = findMissing(existingAllow, [...profile.allow])
+  let missingAllow = findMissing(existingAllow, [...profile.allow])
+
+  let readOnlyBashWarnings: readonly string[] = []
+  if (profile.readOnlyBash === true) {
+    const readOnlyResult = resolveReadOnlyBashRules(allDesiredDeny)
+    const additionalAllow = readOnlyResult.allowed.filter(
+      rule => !existingAllow.includes(rule) && !missingAllow.includes(rule)
+    )
+    missingAllow = [...missingAllow, ...additionalAllow]
+    readOnlyBashWarnings = readOnlyResult.warnings
+  }
 
   const existingAsk = settings.permissions?.ask ?? []
   const missingAsk = profile.ask ? findMissing(existingAsk, [...profile.ask]) : []
@@ -195,5 +207,6 @@ export function applyProfileToSettings(
     removedFromAsk,
     ...(conflicts.length > 0 ? { conflicts } : {}),
     ...(crossToolConflicts.length > 0 ? { crossToolConflicts } : {}),
+    ...(readOnlyBashWarnings.length > 0 ? { readOnlyBashWarnings } : {}),
   }
 }

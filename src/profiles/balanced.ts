@@ -22,4 +22,5 @@ export const balancedProfile: Profile = {
     ...HARD_TO_REVERSE_ASK_RULES,
   ],
   hooks: { enforce: true, sessionDiagnose: false },
+  readOnlyBash: true,
 }

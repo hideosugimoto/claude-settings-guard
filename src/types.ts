@@ -121,4 +121,5 @@ export interface Profile {
     readonly enforce: boolean
     readonly sessionDiagnose: boolean
   }
+  readonly readOnlyBash?: boolean
 }

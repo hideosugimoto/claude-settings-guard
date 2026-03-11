@@ -29,4 +29,5 @@ export const strictProfile: Profile = {
     ...STRICT_ONLY_ASK_RULES,
   ],
   hooks: { enforce: true, sessionDiagnose: true },
+  readOnlyBash: false,
 }

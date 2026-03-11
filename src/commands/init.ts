@@ -49,6 +49,13 @@ function printApplyResult(prefix: string, applied: ApplyProfileResult): void {
     }
     process.stdout.write(`  ※ バックアップから復元できます\n`)
   }
+
+  if (applied.readOnlyBashWarnings && applied.readOnlyBashWarnings.length > 0) {
+    process.stdout.write(`\n${prefix}読み取り専用 Bash ルール:\n`)
+    for (const warning of applied.readOnlyBashWarnings) {
+      printWarning(`  ${warning}`)
+    }
+  }
 }
 
 async function applyHooksAndWrite(profile: Profile, applied: ApplyProfileResult): Promise<void> {
