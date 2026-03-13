@@ -1,6 +1,6 @@
 {
   "name": "claude-settings-guard",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Claude Code settings.json permission guard - diagnose, migrate, and enforce (unofficial, not affiliated with Anthropic)",
   "type": "module",
   "bin": {
