@@ -11,6 +11,8 @@
 
 ## 日本語
 
+> **免責事項**: 本ツールはコミュニティによる非公式ツールです。Anthropic, PBC とは一切関係ありません。"Claude" は Anthropic, PBC の商標です。
+
 Claude Code の `settings.json` 権限設定を診断・修正・補強する CLI ツールです。
 
 ### Quick Start
@@ -373,6 +375,8 @@ src/
 
 ## English
 
+> **Disclaimer**: This is an unofficial community tool. It is not affiliated with, endorsed by, or sponsored by Anthropic, PBC. "Claude" is a trademark of Anthropic, PBC.
+
 A CLI tool to diagnose, fix, and reinforce Claude Code's `settings.json` permission configuration.
 
 ### Quick Start
@@ -733,6 +737,12 @@ src/
 ```
 
 ---
+
+## Disclaimer
+
+This is an unofficial community tool. It is not affiliated with, endorsed by, or sponsored by Anthropic, PBC. "Claude" is a trademark of Anthropic, PBC. Use of the name "Claude" in this project is solely for descriptive purposes to indicate compatibility with Claude Code.
+
+本ツールはコミュニティによる非公式ツールです。Anthropic, PBC とは一切関係がなく、公認・推奨・後援を受けたものではありません。"Claude" は Anthropic, PBC の商標です。本プロジェクトにおける "Claude" の使用は、Claude Code との互換性を示す説明目的に限ります。
 
 ## License
 
