@@ -51,18 +51,21 @@ describe('claude-md-updater', () => {
 
     it('contains bad and good examples for file-based passing', () => {
       const section = generateBashRulesSection()
-      // Bad example: inline SQL/JSON
+      // Bad example: inline SQL and input redirect
       expect(section).toContain('-e "SELECT')
-      // Good example: redirect and @file
       expect(section).toContain('< /tmp/query.sql')
-      expect(section).toContain('@/tmp/payload.json')
+      // Good example: pipe instead of redirect
+      expect(section).toContain('cat /tmp/query.sql |')
+      expect(section).toContain('cat /tmp/payload.json |')
     })
 
-    it('mentions obfuscation detection as the reason', () => {
+    it('mentions obfuscation detection and input redirect as reasons', () => {
       const section = generateBashRulesSection()
       expect(section).toMatch(/難読化検出|obfuscation/i)
       expect(section).toContain("''")
       expect(section).toContain('""')
+      expect(section).toContain('機密ファイル読み取り')
+      expect(section).toContain('リダイレクト < は使わない')
     })
   })
 
