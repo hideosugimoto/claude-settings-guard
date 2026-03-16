@@ -7,6 +7,22 @@ export const KNOWN_TOOLS = [
 
 export type KnownTool = typeof KNOWN_TOOLS[number]
 
+/**
+ * Expand git patterns with -C (directory) variants.
+ * e.g. "Bash(git show *)" → ["Bash(git show *)", "Bash(git -C * show *)"]
+ * This ensures patterns match both "git show ..." and "git -C /path show ..."
+ */
+function expandGitCVariants(patterns: readonly string[]): readonly string[] {
+  return patterns.flatMap(p => {
+    const match = p.match(/^Bash\(git (\S+)(.*)\)$/)
+    if (!match) return [p]
+    const subcmd = match[1]
+    if (subcmd === '-C') return [p]
+    const rest = match[2]
+    return [p, `Bash(git -C * ${subcmd}${rest})`]
+  })
+}
+
 export const DANGEROUS_COMMANDS = [
   'sudo', 'su', 'rm -rf /', 'rm -rf ~',
   'chmod 777', 'dd if=', ':(){:|:&};:',
@@ -69,7 +85,7 @@ export const PREFIX_COMMANDS: ReadonlySet<string> = new Set([
 
 // Commands that are hard to reverse — should require confirmation (ask), not auto-allow
 // Included in all profiles (minimal, balanced, strict)
-export const HARD_TO_REVERSE_ASK_RULES: readonly string[] = [
+export const HARD_TO_REVERSE_ASK_RULES: readonly string[] = expandGitCVariants([
   'Bash(git push *)',
   'Bash(git push)',
   'Bash(git push --force *)',
@@ -91,7 +107,7 @@ export const HARD_TO_REVERSE_ASK_RULES: readonly string[] = [
   'Bash(bun publish)',
   'Bash(cargo publish *)',
   'Bash(cargo publish)',
-]
+])
 
 // Additional ask rules for strict profile only (infra/remote operations)
 export const STRICT_ONLY_ASK_RULES: readonly string[] = [
@@ -107,7 +123,7 @@ export const STRICT_ONLY_ASK_RULES: readonly string[] = [
 // Safe Bash commands to auto-allow when bare "Bash" is removed from allow.
 // These compensate for the loss of blanket Bash access.
 // MUST NOT overlap with HARD_TO_REVERSE_ASK_RULES or DEFAULT_DENY_RULES.
-export const SAFE_BASH_ALLOW_RULES: readonly string[] = [
+export const SAFE_BASH_ALLOW_RULES: readonly string[] = expandGitCVariants([
   // Git (safe operations — push/rebase/tag/reset --hard/clean -f/stash drop are in ask)
   'Bash(git add *)',
   'Bash(git commit *)',
@@ -330,11 +346,11 @@ export const SAFE_BASH_ALLOW_RULES: readonly string[] = [
   'Bash(docker-compose *)',
   'Bash(gh *)',
   'Bash(tmux *)',
-]
+])
 
 // Read-only Bash commands: always safe, no file read/write side effects.
 // DO NOT include `env` (prefix bypass risk).
-export const READ_ONLY_BASH_SAFE: readonly string[] = [
+export const READ_ONLY_BASH_SAFE: readonly string[] = expandGitCVariants([
   'Bash(ls *)',
   'Bash(find *)',
   'Bash(wc *)',
@@ -361,7 +377,7 @@ export const READ_ONLY_BASH_SAFE: readonly string[] = [
   'Bash(git ls-files *)',
   'Bash(git reflog *)',
   'Bash(git blame *)',
-]
+])
 
 // File-reading Bash commands: can read file contents, may conflict with Read/Grep deny rules.
 // sed is also in FILE_WRITE_COMMANDS (sed -i can write).

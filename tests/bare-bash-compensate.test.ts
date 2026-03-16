@@ -56,6 +56,31 @@ describe('SAFE_BASH_ALLOW_RULES', () => {
     }
   })
 
+  it('does NOT include -C variants of dangerous commands', () => {
+    const dangerousCVariants = [
+      'Bash(git -C * push *)', 'Bash(git -C * push)',
+      'Bash(git -C * push --force *)',
+      'Bash(git -C * reset --hard *)',
+      'Bash(git -C * branch -D *)',
+      'Bash(git -C * clean -f *)',
+      'Bash(git -C * rebase *)',
+      'Bash(git -C * tag *)',
+      'Bash(git -C * stash drop *)',
+    ]
+    for (const cmd of dangerousCVariants) {
+      expect(SAFE_BASH_ALLOW_RULES).not.toContain(cmd)
+    }
+  })
+
+  it('includes -C variants of safe git commands', () => {
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * show *)')
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * log *)')
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * diff *)')
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * status *)')
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * add *)')
+    expect(SAFE_BASH_ALLOW_RULES).toContain('Bash(git -C * commit *)')
+  })
+
   it('does NOT include broad patterns that override ask rules', () => {
     // These broad patterns were removed because they match ask-protected commands
     const broad = [

@@ -35,6 +35,14 @@ describe('READ_ONLY_BASH_SAFE constants', () => {
     const hasEnv = READ_ONLY_BASH_SAFE.some(r => r.startsWith('Bash(env'))
     expect(hasEnv).toBe(false)
   })
+
+  it('includes -C variants for git read-only commands', () => {
+    expect(READ_ONLY_BASH_SAFE).toContain('Bash(git -C * show *)')
+    expect(READ_ONLY_BASH_SAFE).toContain('Bash(git -C * log *)')
+    expect(READ_ONLY_BASH_SAFE).toContain('Bash(git -C * diff *)')
+    expect(READ_ONLY_BASH_SAFE).toContain('Bash(git -C * status *)')
+    expect(READ_ONLY_BASH_SAFE).toContain('Bash(git -C * blame *)')
+  })
 })
 
 describe('READ_ONLY_BASH_FILE_READERS constants', () => {

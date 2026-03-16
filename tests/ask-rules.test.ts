@@ -22,6 +22,18 @@ describe('HARD_TO_REVERSE_ASK_RULES', () => {
     expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git clean -f *)')
   })
 
+  it('includes -C variants of dangerous git commands', () => {
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * push *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * push)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * push --force *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * reset --hard *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * branch -D *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * clean -f *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * rebase *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * tag *)')
+    expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git -C * stash drop *)')
+  })
+
   it('includes git history-rewriting rules', () => {
     expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git rebase *)')
     expect(HARD_TO_REVERSE_ASK_RULES).toContain('Bash(git tag *)')
