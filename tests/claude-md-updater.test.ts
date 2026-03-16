@@ -41,6 +41,29 @@ describe('claude-md-updater', () => {
       expect(section).toContain('|')
       expect(section).toMatch(/パイプ|pipe/i)
     })
+
+    it('contains file-based argument passing rule', () => {
+      const section = generateBashRulesSection()
+      expect(section).toContain('ファイル経由')
+      expect(section).toContain('一時ファイル')
+      expect(section).toContain('Write ツール')
+    })
+
+    it('contains bad and good examples for file-based passing', () => {
+      const section = generateBashRulesSection()
+      // Bad example: inline SQL/JSON
+      expect(section).toContain('-e "SELECT')
+      // Good example: redirect and @file
+      expect(section).toContain('< /tmp/query.sql')
+      expect(section).toContain('@/tmp/payload.json')
+    })
+
+    it('mentions obfuscation detection as the reason', () => {
+      const section = generateBashRulesSection()
+      expect(section).toMatch(/難読化検出|obfuscation/i)
+      expect(section).toContain("''")
+      expect(section).toContain('""')
+    })
   })
 
   describe('updateClaudeMd', () => {
