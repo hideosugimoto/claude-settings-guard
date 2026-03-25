@@ -157,7 +157,11 @@ export function applyProfileToSettings(
     ...(settings.permissions?.deny ?? []),
     ...(settings.deny ?? []),
   ]
-  const allDesiredDeny = [...new Set([...DEFAULT_DENY_RULES, ...profile.deny])]
+  // Exclude DEFAULT_DENY_RULES that the profile explicitly places in ask
+  // (e.g. smart profile moves base64 from deny to ask)
+  const profileAskSet = new Set(profile.ask ?? [])
+  const applicableDefaults = DEFAULT_DENY_RULES.filter(r => !profileAskSet.has(r))
+  const allDesiredDeny = [...new Set([...applicableDefaults, ...profile.deny])]
   const missingDeny = findMissing(existingDeny, allDesiredDeny)
 
   const existingAllow = settings.permissions?.allow ?? []

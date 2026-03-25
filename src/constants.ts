@@ -411,8 +411,6 @@ export const SMART_ASK_RULES: readonly string[] = [
   // Remote Shell Writes
   'Bash(kubectl exec *)',
   'Bash(docker exec *)',
-  // Blind Apply (auto-approve flags)
-  'Bash(terraform apply -auto-approve *)',
   // Interfere With Others
   'Bash(kill -9 *)',
   'Bash(killall *)',
