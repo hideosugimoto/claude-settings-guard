@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
-import { extractManagedRules, saveManagedRules, loadManagedRules } from '../core/automode-switch.js'
+import { extractManagedRules, saveManagedRules, loadManagedRules, getCsgRulesPath } from '../core/automode-switch.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { printSuccess, printWarning, printError } from '../utils/display.js'
 import type { ClaudeSettings } from '../types.js'
@@ -91,6 +92,10 @@ export async function autoCommand(args: readonly string[]): Promise<void> {
     process.exit(1)
   }
 
+  // Check if another csg auto session is already running (csg-rules.json exists).
+  // If so, skip rule extraction — rules are already backed up and removed.
+  const alreadyRunning = existsSync(getCsgRulesPath())
+
   const settings = await readGlobalSettings()
   if (!settings) {
     printError('settings.json が見つかりません。先に csg setup を実行してください。')
@@ -98,20 +103,25 @@ export async function autoCommand(args: readonly string[]): Promise<void> {
   }
 
   // Extract and save managed rules for later restoration
-  const rules = extractManagedRules(settings)
-  const hasRules = rules.deny.length > 0 || rules.allow.length > 0 || rules.ask.length > 0
-
-  if (hasRules) {
-    await saveManagedRules(rules)
-    const cleaned = removeManagedRules(settings, rules)
-    const writeResult = await writeSettings(getGlobalSettingsPath(), cleaned, { skipBackup: true })
-    if (!writeResult.success) {
-      printError(`settings.json の書き込みに失敗: ${writeResult.error}`)
-      process.exit(1)
-    }
-    printSuccess(`csg ルールを一時解除 (deny:${rules.deny.length} allow:${rules.allow.length} ask:${rules.ask.length})`)
+  let hasRules = false
+  if (alreadyRunning) {
+    printWarning('別の csg auto セッションが実行中です。ルール退避をスキップします。')
   } else {
-    printWarning('解除する csg ルールがありません')
+    const rules = extractManagedRules(settings)
+    hasRules = rules.deny.length > 0 || rules.allow.length > 0 || rules.ask.length > 0
+
+    if (hasRules) {
+      await saveManagedRules(rules)
+      const cleaned = removeManagedRules(settings, rules)
+      const writeResult = await writeSettings(getGlobalSettingsPath(), cleaned, { skipBackup: true })
+      if (!writeResult.success) {
+        printError(`settings.json の書き込みに失敗: ${writeResult.error}`)
+        process.exit(1)
+      }
+      printSuccess(`csg ルールを一時解除 (deny:${rules.deny.length} allow:${rules.allow.length} ask:${rules.ask.length})`)
+    } else {
+      printWarning('解除する csg ルールがありません')
+    }
   }
 
   process.stdout.write('claude --permission-mode auto を起動します...\n\n')
