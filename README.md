@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-821%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1083%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -34,6 +34,28 @@ CI や自動化では `-y` フラグで非対話実行できます:
 ```bash
 npx claude-settings-guard -y
 ```
+
+### AutoMode 対応
+
+csg は Claude Code の AutoMode と自動で共存します。セットアップ後は何も意識する必要はありません。
+
+| 起動モード | csg の動作 |
+|-----------|-----------|
+| AutoMode ON (`--permission-mode auto`) | deny/ask/allow ルールを自動解除。AutoMode の分類器に任せる |
+| AutoMode OFF（通常） | deny/ask/allow ルールを自動復元。従来通り保護 |
+
+切り替えは SessionStart hook が `permission_mode` を検出して自動で行います。初回は `/clear` が必要な場合があります。
+
+AutoMode に完全移行する場合は `csg cleanup` で csg の設定を全除去できます。`csg setup` で再セットアップも可能です。
+
+`csg diagnose` は AutoMode 設定の安全性もチェックします:
+
+| コード | 重要度 | 内容 |
+|--------|--------|------|
+| `AUTO_MODE_SOFT_DENY_OVERRIDE` | CRITICAL | `soft_deny` がデフォルトより少ない（保護消失） |
+| `AUTO_MODE_ALLOW_OVERRIDE` | WARNING | `allow` がデフォルトより多い（過剰な例外） |
+| `AUTO_MODE_NO_ENVIRONMENT` | INFO | `environment` 未設定 |
+| `AUTO_MODE_HOOK_CONFLICT` | WARNING | enforce フックと AutoMode が共存 |
 
 ### 解決する問題
 
@@ -129,10 +151,12 @@ csg init --profile strict    # プロファイル指定
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask ルールが追加される
+├── csg-rules.json             ← AutoMode 切り替え用ルール保存
 ├── CLAUDE.md                  ← Bash 複合コマンドルールが追加される
 ├── backups/                   ← 設定変更前の自動バックアップ
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 強制フック
+│   ├── csg-session.sh         ← AutoMode 切り替えフック (SessionStart)
 │   └── session-diagnose.sh    ← 起動時自動診断 (strict のみ)
 └── commands/
     ├── csg.md                 ← /csg スラッシュコマンド
@@ -210,6 +234,7 @@ csg enforce --dry-run
 | `csg recommend [-y\|--yes]` | テレメトリデータを分析し、権限設定を推薦・自動適用する |
 | `csg enforce [--dry-run]` | deny ルールの強制フック (PreToolUse) を生成・登録する |
 | `csg init [--profile NAME] [--force]` | 初回セットアップ: スラッシュコマンド・プロファイル・フックを配置 |
+| `csg cleanup [--dry-run]` | csg が管理する設定を全て除去する (AutoMode 移行時) |
 | `csg mcp` | MCP サーバーとして起動 (Claude Code 統合) |
 
 #### 終了コード
@@ -334,7 +359,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (35 files, 821 tests)
+npm test               # テスト実行 (61 files, 1083 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -398,6 +423,28 @@ For CI or automation, use the `-y` flag for non-interactive mode:
 ```bash
 npx claude-settings-guard -y
 ```
+
+### AutoMode Compatibility
+
+csg automatically coexists with Claude Code's AutoMode. After setup, no manual configuration is needed.
+
+| Launch Mode | csg Behavior |
+|-------------|-------------|
+| AutoMode ON (`--permission-mode auto`) | Automatically removes deny/ask/allow rules. Lets the AutoMode classifier handle everything |
+| AutoMode OFF (normal) | Automatically restores deny/ask/allow rules. Full csg protection |
+
+Switching is handled by a SessionStart hook that detects `permission_mode`. You may need to `/clear` on the first switch.
+
+To fully migrate to AutoMode, run `csg cleanup` to remove all csg settings. Run `csg setup` to re-setup.
+
+`csg diagnose` also checks AutoMode configuration safety:
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| `AUTO_MODE_SOFT_DENY_OVERRIDE` | CRITICAL | `soft_deny` has fewer rules than defaults (lost protections) |
+| `AUTO_MODE_ALLOW_OVERRIDE` | WARNING | `allow` has more rules than defaults (excessive exceptions) |
+| `AUTO_MODE_NO_ENVIRONMENT` | INFO | `environment` not configured |
+| `AUTO_MODE_HOOK_CONFLICT` | WARNING | enforce hook coexists with AutoMode |
 
 ### Problems Solved
 
@@ -494,10 +541,12 @@ csg init --profile strict    # Profile-based init
 ```
 ~/.claude/
 ├── settings.json              ← deny/allow/ask rules added
+├── csg-rules.json             ← Saved rules for AutoMode switching
 ├── CLAUDE.md                  ← Bash compound command rules added
 ├── backups/                   ← Auto-backups before changes
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 enforcement hook
+│   ├── csg-session.sh         ← AutoMode switch hook (SessionStart)
 │   └── session-diagnose.sh    ← Startup auto-diagnostics (strict only)
 └── commands/
     ├── csg.md                 ← /csg slash command
@@ -575,6 +624,7 @@ Blocks network commands. For security-critical environments.
 | `csg recommend [-y\|--yes]` | Analyze telemetry, suggest and auto-apply permission changes |
 | `csg enforce [--dry-run]` | Generate enforcement hook from deny rules |
 | `csg init [--profile NAME] [--force]` | First-time setup: deploy slash commands, profiles, and hooks |
+| `csg cleanup [--dry-run]` | Remove all csg-managed settings (for AutoMode migration) |
 | `csg mcp` | Start as MCP server for Claude Code integration |
 
 #### Exit Codes
@@ -699,7 +749,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (35 files, 821 tests)
+npm test               # Run tests (61 files, 1083 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
