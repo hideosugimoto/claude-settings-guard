@@ -3,13 +3,14 @@ import { getAllProfileDenyRules, getProfile, getProfileNames, isValidProfileName
 import { minimalProfile } from '../src/profiles/minimal.js'
 import { balancedProfile } from '../src/profiles/balanced.js'
 import { strictProfile } from '../src/profiles/strict.js'
-import { DEFAULT_DENY_RULES } from '../src/constants.js'
+import { smartProfile } from '../src/profiles/smart.js'
+import { DEFAULT_DENY_RULES, HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES, SMART_ASK_RULES } from '../src/constants.js'
 import type { ProfileName } from '../src/types.js'
 
 describe('profiles', () => {
   describe('getProfileNames', () => {
-    it('returns all three profile names', () => {
-      expect(getProfileNames()).toEqual(['minimal', 'balanced', 'strict'])
+    it('returns all profile names', () => {
+      expect(getProfileNames()).toEqual(['minimal', 'balanced', 'strict', 'smart'])
     })
   })
 
@@ -18,6 +19,7 @@ describe('profiles', () => {
       expect(isValidProfileName('minimal')).toBe(true)
       expect(isValidProfileName('balanced')).toBe(true)
       expect(isValidProfileName('strict')).toBe(true)
+      expect(isValidProfileName('smart')).toBe(true)
     })
 
     it('rejects invalid profile names', () => {
@@ -32,12 +34,13 @@ describe('profiles', () => {
       expect(getProfile('minimal')).toBe(minimalProfile)
       expect(getProfile('balanced')).toBe(balancedProfile)
       expect(getProfile('strict')).toBe(strictProfile)
+      expect(getProfile('smart')).toBe(smartProfile)
     })
   })
 
   describe('profiles registry', () => {
-    it('contains all three profiles', () => {
-      expect(Object.keys(profiles)).toEqual(['minimal', 'balanced', 'strict'])
+    it('contains all profiles', () => {
+      expect(Object.keys(profiles)).toEqual(['minimal', 'balanced', 'strict', 'smart'])
     })
   })
 
@@ -122,10 +125,77 @@ describe('profiles', () => {
     })
   })
 
+  describe('smart profile', () => {
+    it('has correct name', () => {
+      expect(smartProfile.name).toBe('smart')
+    })
+
+    it('allows Write and Edit (unlike balanced)', () => {
+      expect(smartProfile.allow).toContain('Write')
+      expect(smartProfile.allow).toContain('Edit')
+    })
+
+    it('does not have bare Bash in allow', () => {
+      expect(smartProfile.allow).not.toContain('Bash')
+    })
+
+    it('denies eval but not base64', () => {
+      expect(smartProfile.deny).toContain('Bash(eval *)')
+      expect(smartProfile.deny).not.toContain('Bash(base64 *)')
+    })
+
+    it('has base64 in ask (via SMART_ASK_RULES)', () => {
+      expect(smartProfile.ask).toContain('Bash(base64 *)')
+    })
+
+    it('does not deny curl or wget', () => {
+      expect(smartProfile.deny).not.toContain('Bash(curl *)')
+      expect(smartProfile.deny).not.toContain('Bash(wget *)')
+    })
+
+    it('includes HARD_TO_REVERSE_ASK_RULES', () => {
+      for (const rule of HARD_TO_REVERSE_ASK_RULES) {
+        expect(smartProfile.ask).toContain(rule)
+      }
+    })
+
+    it('includes STRICT_ONLY_ASK_RULES', () => {
+      for (const rule of STRICT_ONLY_ASK_RULES) {
+        expect(smartProfile.ask).toContain(rule)
+      }
+    })
+
+    it('includes SMART_ASK_RULES', () => {
+      for (const rule of SMART_ASK_RULES) {
+        expect(smartProfile.ask).toContain(rule)
+      }
+    })
+
+    it('has no overlap between deny and ask', () => {
+      const denySet = new Set(smartProfile.deny)
+      for (const rule of smartProfile.ask ?? []) {
+        expect(denySet.has(rule)).toBe(false)
+      }
+    })
+
+    it('denies sensitive file access', () => {
+      expect(smartProfile.deny).toContain('Read(**/.env)')
+      expect(smartProfile.deny).toContain('Write(**/secrets/**)')
+    })
+
+    it('does not enable sessionDiagnose', () => {
+      expect(smartProfile.hooks.sessionDiagnose).toBe(false)
+    })
+
+    it('enables readOnlyBash', () => {
+      expect(smartProfile.readOnlyBash).toBe(true)
+    })
+  })
+
   describe('getAllProfileDenyRules', () => {
     it('returns a Set containing all deny rules from every profile', () => {
       const allRules = getAllProfileDenyRules()
-      const allNames: ProfileName[] = ['minimal', 'balanced', 'strict']
+      const allNames: ProfileName[] = ['minimal', 'balanced', 'strict', 'smart']
 
       for (const name of allNames) {
         const profile = getProfile(name)
@@ -178,7 +248,7 @@ describe('profiles', () => {
   })
 
   describe('all profiles have required fields', () => {
-    const allNames: ProfileName[] = ['minimal', 'balanced', 'strict']
+    const allNames: ProfileName[] = ['minimal', 'balanced', 'strict', 'smart']
 
     for (const name of allNames) {
       it(`${name} has all required fields`, () => {

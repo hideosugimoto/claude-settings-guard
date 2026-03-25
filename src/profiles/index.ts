@@ -3,11 +3,13 @@ import { DEFAULT_DENY_RULES } from '../constants.js'
 import { minimalProfile } from './minimal.js'
 import { balancedProfile } from './balanced.js'
 import { strictProfile } from './strict.js'
+import { smartProfile } from './smart.js'
 
 export const profiles: Readonly<Record<ProfileName, Profile>> = {
   minimal: minimalProfile,
   balanced: balancedProfile,
   strict: strictProfile,
+  smart: smartProfile,
 }
 
 export function getProfile(name: ProfileName): Profile {
@@ -15,11 +17,11 @@ export function getProfile(name: ProfileName): Profile {
 }
 
 export function getProfileNames(): readonly ProfileName[] {
-  return ['minimal', 'balanced', 'strict']
+  return ['minimal', 'balanced', 'strict', 'smart']
 }
 
 export function isValidProfileName(name: string): name is ProfileName {
-  return name === 'minimal' || name === 'balanced' || name === 'strict'
+  return name === 'minimal' || name === 'balanced' || name === 'strict' || name === 'smart'
 }
 
 /**

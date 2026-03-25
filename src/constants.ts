@@ -393,5 +393,47 @@ export const READ_ONLY_BASH_FILE_READERS: readonly string[] = [
   'Bash(sed *)',
 ]
 
+// Additional ask rules for the smart profile.
+// Maps AutoMode's soft_deny categories to concrete Bash patterns.
+// Categories that require semantic/AI judgment (e.g. data exfiltration intent,
+// content integrity) cannot be expressed as static patterns and are not included.
+export const SMART_ASK_RULES: readonly string[] = [
+  // Cloud Storage Mass Delete
+  'Bash(aws s3 rm *)',
+  'Bash(aws s3api delete-objects *)',
+  'Bash(gsutil rm *)',
+  'Bash(gsutil -m rm *)',
+  'Bash(az storage blob delete *)',
+  'Bash(az storage container delete *)',
+  // Production Deploy (beyond publish — infra tools)
+  'Bash(helm install *)',
+  'Bash(helm upgrade *)',
+  // Remote Shell Writes
+  'Bash(kubectl exec *)',
+  'Bash(docker exec *)',
+  // Blind Apply (auto-approve flags)
+  'Bash(terraform apply -auto-approve *)',
+  // Interfere With Others
+  'Bash(kill -9 *)',
+  'Bash(killall *)',
+  // Modify Shared Resources
+  'Bash(terraform state *)',
+  // Expose Local Services
+  'Bash(ngrok *)',
+  // Credential Exploration
+  'Bash(kubectl get secrets *)',
+  'Bash(kubectl get secret *)',
+  // Exfil Scouting
+  'Bash(nmap *)',
+  'Bash(nc *)',
+  'Bash(netcat *)',
+  // Unauthorized Persistence
+  'Bash(crontab *)',
+  // Create Unsafe Agents
+  'Bash(docker run --privileged *)',
+  // Code Execution Obfuscation (ask, not deny — has legitimate uses)
+  'Bash(base64 *)',
+]
+
 export const RECOMMEND_ALLOW_THRESHOLD = 3
 export const RECOMMEND_DENY_THRESHOLD = 2

@@ -26,7 +26,7 @@ npx claude-settings-guard
 1. 設定の診断 (レガシー構文、構造問題、競合を検出)
 2. マイグレーション (レガシー→モダン構文の一括変換)
 3. テレメトリ分析 (使用パターンに基づく推薦)
-4. プロファイル選択 (minimal / balanced / strict)
+4. プロファイル選択 (minimal / balanced / strict / smart)
 5. 二重防御セットアップ (deny ルール + 強制フック)
 
 CI や自動化では `-y` フラグで非対話実行できます:
@@ -107,6 +107,9 @@ npx claude-settings-guard -y
 # balanced プロファイル（推奨デフォルト）
 npx claude-settings-guard init --profile balanced
 
+# AutoMode 相当の保護
+npx claude-settings-guard init --profile smart
+
 # セキュリティ重視
 npx claude-settings-guard init --profile strict
 
@@ -161,7 +164,7 @@ csg enforce --dry-run
 
 ### プロファイル
 
-3つのプリセットから選択できます。各プロファイルは基本 deny ルール（sudo, su, rm -rf, eval, base64, .env, secrets）を含みます。
+4つのプリセットから選択できます。各プロファイルは基本 deny ルール（sudo, su, rm -rf, .env, secrets）を含みます。
 
 全プロファイル共通で、取り消しが困難なコマンド（git push, git reset --hard, npm/pnpm/yarn/bun/cargo publish 等）は `ask` に設定され、実行前に確認を求めます。危険な chmod（777, +s）は deny に設定されます。
 
@@ -185,6 +188,17 @@ csg enforce --dry-run
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
 | ask | `Bash`, `Edit`, `Write` + 取消困難コマンド 21 ルール |
+| フック | enforce-permissions のみ |
+
+#### smart（AutoMode 相当）
+
+Claude Code の AutoMode（AI 分類器）の判定基準に準拠した静的ルール。ローカル開発は許可し、外部通信・破壊操作・インフラ変更のみ確認を要求。AutoMode が Team/Enterprise 限定のため、個人プランでも同等の保護を得られます。
+
+| 設定 | 内容 |
+|------|------|
+| deny | `Bash(sudo *)`, `Bash(eval *)`, `Bash(chmod 777 *)`, `Read(**/.env)`, `Write(**/secrets/**)` 等 |
+| allow | `Read`, `Write`, `Edit`, `Glob`, `Grep` (curl/wget もローカル開発用に許可) |
+| ask | 取消困難コマンド 21 ルール + インフラ系 7 ルール + AutoMode 相当 16 ルール (クラウド操作、プロセス管理、永続化、ポートスキャン等) |
 | フック | enforce-permissions のみ |
 
 #### strict（セキュリティ重視）
@@ -390,7 +404,7 @@ This single command launches an interactive guide that automatically:
 1. Diagnoses settings (detects legacy syntax, structural issues, conflicts)
 2. Migrates patterns (batch conversion from legacy to modern syntax)
 3. Analyzes telemetry (recommendations based on usage patterns)
-4. Selects a profile (minimal / balanced / strict)
+4. Selects a profile (minimal / balanced / strict / smart)
 5. Sets up dual-layer defense (deny rules + enforcement hooks)
 
 For CI or automation, use the `-y` flag for non-interactive mode:
@@ -472,6 +486,9 @@ npx claude-settings-guard -y
 # Balanced profile (recommended default)
 npx claude-settings-guard init --profile balanced
 
+# AutoMode-equivalent protection
+npx claude-settings-guard init --profile smart
+
 # Security-focused
 npx claude-settings-guard init --profile strict
 
@@ -526,7 +543,7 @@ csg enforce --dry-run
 
 ### Profiles
 
-Choose from 3 presets. Each profile includes foundational deny rules (sudo, su, rm -rf, eval, base64, .env, secrets).
+Choose from 4 presets. Each profile includes foundational deny rules (sudo, su, rm -rf, .env, secrets).
 
 All profiles include `ask` rules for hard-to-reverse commands (git push, git reset --hard, npm/pnpm/yarn/bun/cargo publish, etc.) that require confirmation before execution. Dangerous chmod operations (777, +s) are denied.
 
@@ -550,6 +567,17 @@ Auto-allows reads, requires confirmation for writes/execution.
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Read(**/.env)`, `Read(**/secrets/**)` |
 | allow | `Read`, `Glob`, `Grep` |
 | ask | `Bash`, `Edit`, `Write` + hard-to-reverse commands (21 rules) |
+| hooks | enforce-permissions only |
+
+#### smart (AutoMode-Equivalent)
+
+Static rules based on Claude Code's AutoMode (AI classifier) criteria. Allows local development freely while requiring confirmation for external communication, destructive operations, and infrastructure changes. Provides AutoMode-equivalent protection for individual Pro/Max plans where AutoMode is unavailable.
+
+| Setting | Content |
+|---------|---------|
+| deny | `Bash(sudo *)`, `Bash(eval *)`, `Bash(chmod 777 *)`, `Read(**/.env)`, `Write(**/secrets/**)`, etc. |
+| allow | `Read`, `Write`, `Edit`, `Glob`, `Grep` (curl/wget allowed for local dev) |
+| ask | Hard-to-reverse (21 rules) + infra (7 rules) + AutoMode-equivalent (16 rules: cloud ops, process mgmt, persistence, port scanning, etc.) |
 | hooks | enforce-permissions only |
 
 #### strict (Security-Focused)

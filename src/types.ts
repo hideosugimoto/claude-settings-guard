@@ -109,7 +109,7 @@ export interface SettingsLayer {
 
 // --- Profile Types ---
 
-export type ProfileName = 'minimal' | 'balanced' | 'strict'
+export type ProfileName = 'minimal' | 'balanced' | 'strict' | 'smart'
 
 export interface Profile {
   readonly name: ProfileName
