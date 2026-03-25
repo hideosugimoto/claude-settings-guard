@@ -16,10 +16,18 @@ const permissionsSchema = z.object({
   allow: z.array(z.string()).optional(),
   deny: z.array(z.string()).optional(),
   ask: z.array(z.string()).optional(),
+  defaultMode: z.string().optional(),
+}).passthrough()
+
+const autoModeSchema = z.object({
+  environment: z.array(z.string()).optional(),
+  allow: z.array(z.string()).optional(),
+  soft_deny: z.array(z.string()).optional(),
 }).passthrough()
 
 export const claudeSettingsSchema = z.object({
   permissions: permissionsSchema.optional(),
+  autoMode: autoModeSchema.optional(),
   hooks: z.record(z.array(hookRuleSchema)).optional(),
   deny: z.array(z.string()).optional(),
   allowedTools: z.array(z.string()).optional(),
@@ -60,6 +68,8 @@ export type IssueCode =
   | 'CROSS_TOOL_BYPASS'
   | 'PREFIX_BYPASS_RISK'
   | 'JQ_NOT_FOUND'
+  | 'AUTO_MODE_HOOK_CONFLICT'
+  | 'AUTO_MODE_REDUNDANT_RULES'
 
 export interface DiagnosticIssue {
   readonly severity: Severity

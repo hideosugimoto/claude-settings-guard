@@ -3,6 +3,7 @@ import { runDiagnose } from './diagnose.js'
 import { checkMigration, applyMigration } from './migrate.js'
 import { runRecommend } from './recommend.js'
 import { initCommand } from './init.js'
+import { isAutoModeSupported } from '../core/claude-version.js'
 import { confirm, select } from '../utils/prompt.js'
 import { printHeader, printIssue, printMigration, printRecommendation, printSuccess, printWarning } from '../utils/display.js'
 import { getProfileNames, getProfile, isValidProfileName } from '../profiles/index.js'
@@ -150,6 +151,20 @@ function printSummary(): void {
   process.stdout.write('  csg recommend    - テレメトリから推薦\n')
   process.stdout.write('  csg enforce      - 強制フックを再生成\n')
   process.stdout.write('  csg init         - 初期セットアップ再実行\n')
+  process.stdout.write('  csg cleanup      - csg 設定を全除去 (AutoMode 移行時)\n')
+
+  if (isAutoModeSupported()) {
+    process.stdout.write(chalk.dim('\n─'.repeat(20)) + '\n')
+    process.stdout.write(chalk.cyan('AutoMode 対応の Claude Code を検出しました。\n'))
+    process.stdout.write('\n')
+    process.stdout.write('  AutoMode を常用する場合:\n')
+    process.stdout.write('    csg cleanup で csg 設定を除去し、AutoMode に任せられます。\n')
+    process.stdout.write('    enforce フックは AutoMode 時に自動スキップされます。\n')
+    process.stdout.write('\n')
+    process.stdout.write('  AutoMode を使わない場合:\n')
+    process.stdout.write('    csg の deny/ask ルールが危険なコマンドを抑止します。\n')
+    process.stdout.write('    そのまま csg の保護を維持してください。\n')
+  }
 }
 
 export async function setupCommand(options: { yes?: boolean; profile?: string }): Promise<void> {

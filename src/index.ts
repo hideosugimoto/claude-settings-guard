@@ -5,6 +5,7 @@ import { recommendCommand } from './commands/recommend.js'
 import { enforceCommand } from './commands/enforce.js'
 import { initCommand } from './commands/init.js'
 import { setupCommand } from './commands/setup.js'
+import { cleanupCommand } from './commands/cleanup.js'
 import { startMcpServer } from './mcp-server.js'
 import { VERSION } from './version.js'
 import { handleCommandError } from './utils/exit.js'
@@ -86,9 +87,10 @@ program
   .command('enforce')
   .description('deny ルールの強制フック (PreToolUse) を生成・登録する')
   .option('--dry-run', '変更を適用せず、生成内容のみ表示する')
+  .option('--force', 'AutoMode 有効時でも強制的にフックを生成する')
   .action(async (opts) => {
     try {
-      await enforceCommand({ dryRun: opts.dryRun })
+      await enforceCommand({ dryRun: opts.dryRun, force: opts.force })
     } catch (err) {
       handleCommandError(err)
     }
@@ -103,6 +105,18 @@ program
   .action(async (opts) => {
     try {
       await initCommand({ profile: opts.profile, force: opts.force, dryRun: opts.dryRun })
+    } catch (err) {
+      handleCommandError(err)
+    }
+  })
+
+program
+  .command('cleanup')
+  .description('csg が管理する設定を全て除去する (AutoMode 移行時など)')
+  .option('--dry-run', '変更を適用せず、除去内容のみ表示する')
+  .action(async (opts) => {
+    try {
+      await cleanupCommand({ dryRun: opts.dryRun })
     } catch (err) {
       handleCommandError(err)
     }

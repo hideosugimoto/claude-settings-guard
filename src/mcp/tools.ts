@@ -13,6 +13,7 @@ import { groupStatsByPrefix } from '../core/pattern-grouper.js'
 import { detectProject } from '../core/project-detector.js'
 import { analyzeBypassRisks } from '../core/bypass-analyzer.js'
 import { getProfile, isValidProfileName, getProfileNames } from '../profiles/index.js'
+import { detectAutoMode } from '../core/automode-detector.js'
 import { getGlobalSettingsPath, getLocalSettingsPath, getProjectSettingsPath } from '../utils/paths.js'
 import type { Profile, ClaudeSettings } from '../types.js'
 
@@ -146,6 +147,7 @@ export async function handleDiagnose(args: Record<string, unknown> = {}): Promis
       enforceHookInstalled: checkEnforceHookInstalled(settings),
       sessionDiagnoseHookInstalled: checkSessionDiagnoseHookInstalled(settings),
     },
+    autoMode: settings ? detectAutoMode(settings) : { enabled: false, hasConfig: false, hasEnforceHook: false },
     settingsFiles: {
       global: { path: globalSettingsPath, exists: existsSync(globalSettingsPath) },
       local: { path: localSettingsPath, exists: existsSync(localSettingsPath) },

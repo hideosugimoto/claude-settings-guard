@@ -189,9 +189,9 @@ export function applyProfileToSettings(
   const { ask: _existingAskProp, ...permissionsWithoutAsk } = settings.permissions ?? {}
   const updatedPermissions = {
     ...permissionsWithoutAsk,
-    deny: finalDeny,
-    allow: cleanedAllow,
-    ...(finalAsk.length > 0 ? { ask: finalAsk } : {}),
+    deny: [...finalDeny],
+    allow: [...cleanedAllow],
+    ...(finalAsk.length > 0 ? { ask: [...finalAsk] } : {}),
   }
 
   const conflicts = detectConflicts(updatedPermissions.allow, updatedPermissions.deny)
