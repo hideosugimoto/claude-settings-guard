@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-1083%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1084%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -37,14 +37,26 @@ npx claude-settings-guard -y
 
 ### AutoMode 対応
 
-csg は Claude Code の AutoMode と自動で共存します。セットアップ後は何も意識する必要はありません。
+csg は Claude Code の AutoMode と共存できます。`csg auto` コマンドで AutoMode を起動すると、csg のルールを一時解除し、終了時に自動復元します。
 
-| 起動モード | csg の動作 |
+```bash
+# AutoMode で起動（csg ルールを一時解除）
+csg auto
+
+# 引数もそのまま渡せる
+csg auto --resume
+csg auto -p "タスクの説明"
+
+# 通常起動（csg ルール有効のまま）
+claude
+```
+
+| 起動方法 | csg の動作 |
 |-----------|-----------|
-| AutoMode ON (`--permission-mode auto`) | deny/ask/allow ルールを自動解除。AutoMode の分類器に任せる |
-| AutoMode OFF（通常） | deny/ask/allow ルールを自動復元。従来通り保護 |
+| `csg auto` | deny/ask/allow ルールを一時解除 → `claude --permission-mode auto` を起動 → 終了時に自動復元 |
+| `claude`（通常） | deny/ask/allow ルールが有効。従来通り保護 |
 
-切り替えは SessionStart hook が `permission_mode` を検出して自動で行います。初回は `/clear` が必要な場合があります。
+万が一 `csg auto` がクラッシュした場合でも、次回の通常起動時に SessionStart フックが自動復元します（クラッシュリカバリ）。
 
 AutoMode に完全移行する場合は `csg cleanup` で csg の設定を全除去できます。`csg setup` で再セットアップも可能です。
 
@@ -156,7 +168,7 @@ csg init --profile strict    # プロファイル指定
 ├── backups/                   ← 設定変更前の自動バックアップ
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 強制フック
-│   ├── csg-session.sh         ← AutoMode 切り替えフック (SessionStart)
+│   ├── csg-session.sh         ← クラッシュリカバリフック (SessionStart)
 │   └── session-diagnose.sh    ← 起動時自動診断 (strict のみ)
 └── commands/
     ├── csg.md                 ← /csg スラッシュコマンド
@@ -234,7 +246,8 @@ csg enforce --dry-run
 | `csg recommend [-y\|--yes]` | テレメトリデータを分析し、権限設定を推薦・自動適用する |
 | `csg enforce [--dry-run]` | deny ルールの強制フック (PreToolUse) を生成・登録する |
 | `csg init [--profile NAME] [--force]` | 初回セットアップ: スラッシュコマンド・プロファイル・フックを配置 |
-| `csg cleanup [--dry-run]` | csg が管理する設定を全て除去する (AutoMode 移行時) |
+| `csg auto [-- claude-args...]` | csg ルールを一時解除して AutoMode で起動（終了時に自動復元） |
+| `csg cleanup [--dry-run]` | csg が管理する設定を全て除去する (AutoMode 完全移行時) |
 | `csg mcp` | MCP サーバーとして起動 (Claude Code 統合) |
 
 #### 終了コード
@@ -359,7 +372,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (61 files, 1083 tests)
+npm test               # テスト実行 (61 files, 1084 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -375,6 +388,7 @@ src/
 │   ├── recommend.ts      # テレメトリ推薦
 │   ├── enforce.ts        # フック生成
 │   ├── init.ts           # 初期化
+│   ├── auto.ts           # AutoMode ラッパー
 │   └── deploy-slash.ts   # スラッシュコマンド配置
 ├── core/                 # コアロジック
 │   ├── settings-reader.ts    # 3層設定読み込み・マージ
@@ -426,14 +440,26 @@ npx claude-settings-guard -y
 
 ### AutoMode Compatibility
 
-csg automatically coexists with Claude Code's AutoMode. After setup, no manual configuration is needed.
+csg coexists with Claude Code's AutoMode. Use `csg auto` to launch AutoMode with csg rules temporarily removed, and automatically restored on exit.
 
-| Launch Mode | csg Behavior |
+```bash
+# Launch in AutoMode (csg rules temporarily removed)
+csg auto
+
+# Pass-through arguments supported
+csg auto --resume
+csg auto -p "task description"
+
+# Normal launch (csg rules active)
+claude
+```
+
+| Launch Method | csg Behavior |
 |-------------|-------------|
-| AutoMode ON (`--permission-mode auto`) | Automatically removes deny/ask/allow rules. Lets the AutoMode classifier handle everything |
-| AutoMode OFF (normal) | Automatically restores deny/ask/allow rules. Full csg protection |
+| `csg auto` | Temporarily removes deny/ask/allow rules → launches `claude --permission-mode auto` → restores on exit |
+| `claude` (normal) | deny/ask/allow rules remain active. Full csg protection |
 
-Switching is handled by a SessionStart hook that detects `permission_mode`. You may need to `/clear` on the first switch.
+If `csg auto` crashes unexpectedly, the SessionStart hook automatically recovers rules on the next normal launch (crash recovery).
 
 To fully migrate to AutoMode, run `csg cleanup` to remove all csg settings. Run `csg setup` to re-setup.
 
@@ -546,7 +572,7 @@ csg init --profile strict    # Profile-based init
 ├── backups/                   ← Auto-backups before changes
 ├── hooks/
 │   ├── enforce-permissions.sh ← Layer 2 enforcement hook
-│   ├── csg-session.sh         ← AutoMode switch hook (SessionStart)
+│   ├── csg-session.sh         ← Crash recovery hook (SessionStart)
 │   └── session-diagnose.sh    ← Startup auto-diagnostics (strict only)
 └── commands/
     ├── csg.md                 ← /csg slash command
@@ -624,7 +650,8 @@ Blocks network commands. For security-critical environments.
 | `csg recommend [-y\|--yes]` | Analyze telemetry, suggest and auto-apply permission changes |
 | `csg enforce [--dry-run]` | Generate enforcement hook from deny rules |
 | `csg init [--profile NAME] [--force]` | First-time setup: deploy slash commands, profiles, and hooks |
-| `csg cleanup [--dry-run]` | Remove all csg-managed settings (for AutoMode migration) |
+| `csg auto [-- claude-args...]` | Temporarily remove csg rules and launch AutoMode (auto-restore on exit) |
+| `csg cleanup [--dry-run]` | Remove all csg-managed settings (for full AutoMode migration) |
 | `csg mcp` | Start as MCP server for Claude Code integration |
 
 #### Exit Codes
@@ -749,7 +776,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (61 files, 1083 tests)
+npm test               # Run tests (61 files, 1084 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
@@ -765,6 +792,7 @@ src/
 │   ├── recommend.ts      # Telemetry recommendations
 │   ├── enforce.ts        # Hook generation
 │   ├── init.ts           # Initialization
+│   ├── auto.ts           # AutoMode wrapper
 │   └── deploy-slash.ts   # Slash command deployment
 ├── core/                 # Core logic
 │   ├── settings-reader.ts    # 3-layer settings loading & merging

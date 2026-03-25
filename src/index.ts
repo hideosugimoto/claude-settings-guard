@@ -6,6 +6,7 @@ import { enforceCommand } from './commands/enforce.js'
 import { initCommand } from './commands/init.js'
 import { setupCommand } from './commands/setup.js'
 import { cleanupCommand } from './commands/cleanup.js'
+import { autoCommand } from './commands/auto.js'
 import { startMcpServer } from './mcp-server.js'
 import { VERSION } from './version.js'
 import { handleCommandError } from './utils/exit.js'
@@ -117,6 +118,19 @@ program
   .action(async (opts) => {
     try {
       await cleanupCommand({ dryRun: opts.dryRun })
+    } catch (err) {
+      handleCommandError(err)
+    }
+  })
+
+program
+  .command('auto')
+  .description('csg ルールを一時解除して claude --permission-mode auto を起動する')
+  .allowUnknownOption()
+  .allowExcessArguments()
+  .action(async (_opts, cmd) => {
+    try {
+      await autoCommand(cmd.args)
     } catch (err) {
       handleCommandError(err)
     }

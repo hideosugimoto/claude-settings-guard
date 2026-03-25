@@ -63,19 +63,19 @@ describe('automode-switch', () => {
       const script = generateSessionSwitchScript()
 
       expect(script).toContain('#!/bin/bash')
-      expect(script).toContain('permission_mode')
-      expect(script).toContain('"auto"')
+      expect(script).toContain('CSG_PERMISSION_MODE')
+      expect(script).toContain('crash recovery')
     })
 
-    it('includes auto mode detection logic', () => {
+    it('skips recovery when inside csg auto session', () => {
       const script = generateSessionSwitchScript()
 
-      expect(script).toContain('PERMISSION_MODE')
-      expect(script).toContain('auto')
+      expect(script).toContain('CSG_PERMISSION_MODE')
+      expect(script).toContain('exit 0')
       expect(script).toContain('csg-rules.json')
     })
 
-    it('includes rule removal for auto mode', () => {
+    it('includes rule restoration logic', () => {
       const script = generateSessionSwitchScript()
 
       expect(script).toContain('CSG_DENY')
@@ -83,19 +83,18 @@ describe('automode-switch', () => {
       expect(script).toContain('CSG_ASK')
     })
 
-    it('includes rule restoration for non-auto mode', () => {
+    it('includes rule merge with dedup', () => {
       const script = generateSessionSwitchScript()
 
-      // Should have both branches
-      expect(script).toContain('unique')  // merge with dedup
-      expect(script).toContain('select')  // filter out
+      expect(script).toContain('unique')
     })
 
-    it('outputs a message to stderr when switching', () => {
+    it('outputs recovery message to stderr and cleans up rules file', () => {
       const script = generateSessionSwitchScript()
 
       expect(script).toContain('>&2')
-      expect(script).toContain('AutoMode')
+      expect(script).toContain('クラッシュリカバリ')
+      expect(script).toContain('rm -f "$RULES_FILE"')
     })
   })
 
