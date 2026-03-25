@@ -171,13 +171,6 @@ if ! command -v jq &>/dev/null; then
 fi
 
 input=$(cat)
-
-# Skip enforcement when AutoMode is active (classifier handles security)
-PERMISSION_MODE=$(printf '%s' "$input" | jq -r '.permission_mode // ""' 2>/dev/null)
-if [ "$PERMISSION_MODE" = "auto" ]; then
-  exit 0
-fi
-
 TOOL_NAME=$(printf '%s' "$input" | jq -r '.tool_name // ""' 2>/dev/null)
 
 # Fail-closed: reject if tool name is empty (malformed input)

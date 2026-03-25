@@ -1,7 +1,6 @@
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
 import { generateEnforceScript } from '../core/hook-generator.js'
 import { writeSettings } from '../core/settings-writer.js'
-import { detectAutoMode } from '../core/automode-detector.js'
 import { printHeader, printSuccess, printError, printWarning } from '../utils/display.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
@@ -46,24 +45,8 @@ export async function applyEnforce(settings: ClaudeSettings): Promise<{ success:
   }
 }
 
-export async function enforceCommand(options: { dryRun?: boolean; force?: boolean }): Promise<void> {
+export async function enforceCommand(options: { dryRun?: boolean }): Promise<void> {
   printHeader('Claude Settings Guard - 強制フック生成')
-
-  // Check AutoMode compatibility
-  const currentSettings = await readGlobalSettings()
-  if (currentSettings) {
-    const autoModeStatus = detectAutoMode(currentSettings)
-    if (autoModeStatus.enabled && !options.force) {
-      printWarning('AutoMode が有効です。enforce フックは AutoMode の分類器と競合する可能性があります。')
-      printWarning('AutoMode 使用時は enforce フックは不要です。')
-      process.stdout.write('\n強制的に生成するには: csg enforce --force\n')
-      process.stdout.write('AutoMode に完全移行するには: csg migrate --to-automode\n')
-      return
-    }
-    if (autoModeStatus.enabled && options.force) {
-      printWarning('AutoMode が有効ですが、--force により enforce フックを生成します。')
-    }
-  }
 
   const enforceResult = await runEnforce()
   if (!enforceResult) {
@@ -97,12 +80,12 @@ export async function enforceCommand(options: { dryRun?: boolean; force?: boolea
     return
   }
 
-  const latestSettings = currentSettings ?? await readGlobalSettings()
-  if (!latestSettings) {
+  const settings = await readGlobalSettings()
+  if (!settings) {
     exitWithError('settings.json が見つかりません')
   }
 
-  const result = await applyEnforce(latestSettings)
+  const result = await applyEnforce(settings)
 
   if (result.success) {
     printSuccess('強制フックを生成・登録しました')

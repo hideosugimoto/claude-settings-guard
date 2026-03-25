@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { readGlobalSettings, extractAllRules } from '../core/settings-reader.js'
 import { validatePatterns, findConflicts, checkAllowAskConflicts, checkAllowDenyConflicts, checkBareToolConflicts, checkMissingPairedDenyRules, checkCrossToolBypasses, checkPrefixBypasses } from '../core/pattern-validator.js'
-import { detectAutoMode, findAutoModeStrippedRules, checkAutoModeConfig } from '../core/automode-detector.js'
 import { printHeader, printIssue, printSuccess } from '../utils/display.js'
 import { exitWithError } from '../utils/exit.js'
 import { getHooksDir } from '../utils/paths.js'
@@ -115,29 +114,8 @@ export async function runDiagnose(): Promise<DiagnoseResult> {
     }]
     : []
 
-  // AutoMode compatibility checks
-  const autoModeStatus = detectAutoMode(settings)
-  const strippedRules = autoModeStatus.enabled ? findAutoModeStrippedRules(settings) : []
-
-  const autoModeIssues: readonly DiagnosticIssue[] = [
-    ...(autoModeStatus.enabled && autoModeStatus.hasEnforceHook ? [{
-      severity: 'warning' as const,
-      code: 'AUTO_MODE_HOOK_CONFLICT' as const,
-      message: 'AutoMode が有効ですが、PreToolUse enforce フックも設定されています。分類器と競合する可能性があります。',
-      fix: '`csg cleanup` を実行して enforce フックを除去してください',
-    }] : []),
-    ...(autoModeStatus.enabled && strippedRules.length > 0 ? [{
-      severity: 'info' as const,
-      code: 'AUTO_MODE_REDUNDANT_RULES' as const,
-      message: `AutoMode が有効時に自動除去されるブロードルールが ${strippedRules.length} 件あります`,
-      details: strippedRules as string[],
-      fix: 'AutoMode の分類器がこれらのルールを代替します。除去しても安全です。',
-    }] : []),
-    ...checkAutoModeConfig(settings),
-  ]
-
   const severityOrder = { critical: 0, warning: 1, info: 2 }
-  const sorted = [...adjustedIssues, ...jqIssues, ...autoModeIssues].sort(
+  const sorted = [...adjustedIssues, ...jqIssues].sort(
     (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
   )
 

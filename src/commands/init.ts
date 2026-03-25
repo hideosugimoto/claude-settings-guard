@@ -2,8 +2,6 @@ import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regenerator.js'
-import { extractManagedRules, saveManagedRules, deploySessionSwitchHook, mergeSessionSwitchHookIntoSettings } from '../core/automode-switch.js'
-import { expandHome } from '../utils/paths.js'
 import { printHeader, printSuccess, printError, printWarning } from '../utils/display.js'
 import { deploySlashCommands, printDeployResult } from './deploy-slash.js'
 import { isValidProfileName, getProfile } from '../profiles/index.js'
@@ -77,23 +75,7 @@ async function applyHooksAndWrite(profile: Profile, applied: ApplyProfileResult)
       })
     : withEnforce
 
-  // Save csg-managed rules for AutoMode dynamic switching
-  const managedRules = extractManagedRules(withSession)
-  const hasRulesToSave = managedRules.deny.length > 0 || managedRules.allow.length > 0 || managedRules.ask.length > 0
-
-  let withSwitch = withSession
-  if (hasRulesToSave) {
-    const rulesPath = await saveManagedRules(managedRules)
-    printSuccess(`AutoMode 切り替え用ルールを保存: ${rulesPath}`)
-
-    const switchHookPath = await deploySessionSwitchHook()
-    printSuccess(`AutoMode 切り替えフックを生成: ${switchHookPath}`)
-
-    const expandedPath = expandHome('~/.claude/hooks/csg-session.sh')
-    withSwitch = mergeSessionSwitchHookIntoSettings(withSession, expandedPath)
-  }
-
-  const result = await writeSettings(getGlobalSettingsPath(), withSwitch)
+  const result = await writeSettings(getGlobalSettingsPath(), withSession)
   if (result.success) {
     printSuccess('初期セットアップ完了')
     if (result.backupPath) process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
@@ -106,7 +88,6 @@ async function applyHooksAndWrite(profile: Profile, applied: ApplyProfileResult)
   process.stdout.write('  2. /csg-diagnose - 詳細診断\n')
   process.stdout.write('  3. /csg-enforce  - 強制フック更新\n')
   process.stdout.write('  4. csg diagnose  - ターミナルから診断\n')
-  process.stdout.write('  AutoMode 使用時は csg ルールが自動で一時解除されます\n')
 }
 
 export async function initCommand(options: InitOptions = {}): Promise<void> {
