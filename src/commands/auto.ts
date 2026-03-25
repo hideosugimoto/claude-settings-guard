@@ -19,10 +19,14 @@ function removeManagedRules(settings: ClaudeSettings, rules: CsgManagedRules): C
   const keptAllow = (settings.permissions?.allow ?? []).filter(r => !allowSet.has(r))
   const keptAsk = (settings.permissions?.ask ?? []).filter(r => !askSet.has(r))
 
+  // Destructure original deny/allow/ask out to prevent them from leaking
+  // through the spread when keptXxx is empty
+  const { deny: _d, allow: _a, ask: _k, ...restPermissions } = settings.permissions ?? {}
+
   return {
     ...settings,
     permissions: {
-      ...settings.permissions,
+      ...restPermissions,
       ...(keptDeny.length > 0 ? { deny: keptDeny } : {}),
       ...(keptAllow.length > 0 ? { allow: keptAllow } : {}),
       ...(keptAsk.length > 0 ? { ask: keptAsk } : {}),
