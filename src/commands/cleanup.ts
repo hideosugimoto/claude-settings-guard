@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
 import { getAllProfileDenyRules } from '../profiles/index.js'
-import { generateEnvironmentSuggestion } from '../core/environment-generator.js'
 import { printHeader, printSuccess, printWarning } from '../utils/display.js'
 import { exitWithError } from '../utils/exit.js'
 import { getGlobalSettingsPath, getHooksDir, getCommandsDir, getClaudeMdPath } from '../utils/paths.js'
@@ -316,27 +315,11 @@ export async function cleanupCommand(options: { dryRun?: boolean }): Promise<voi
 
   printSuccess('\nクリーンアップ完了')
 
-  // Suggest autoMode.environment setup
-  const cwd = process.cwd()
-  try {
-    const suggestion = await generateEnvironmentSuggestion(cwd)
-
-    process.stdout.write('\n━'.repeat(40) + '\n')
-    process.stdout.write('AutoMode を使用する場合、autoMode.environment の設定を推奨します。\n')
-    process.stdout.write('以下の雛形をカスタマイズして settings.json に追加してください:\n\n')
-
-    const config = {
-      autoMode: {
-        environment: suggestion.entries,
-      },
-    }
-    process.stdout.write(JSON.stringify(config, null, 2) + '\n')
-
-    process.stdout.write('\n設定の確認: claude auto-mode config\n')
-    process.stdout.write('ルールのレビュー: claude auto-mode critique\n')
-  } catch {
-    // Project detection failed, skip suggestion
-  }
+  // Show autoMode.environment hint
+  process.stdout.write('\nAutoMode で git push やクラウド連携を使う場合は、\n')
+  process.stdout.write('autoMode.environment に信頼するインフラを設定してください。\n')
+  process.stdout.write('ローカル開発のみなら設定不要です。\n')
+  process.stdout.write('  詳細: claude auto-mode config\n')
 
   process.stdout.write('\ncsg を再度セットアップするには: csg setup\n')
 }
