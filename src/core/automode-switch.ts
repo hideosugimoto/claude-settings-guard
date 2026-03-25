@@ -1,7 +1,7 @@
 import { readFile, writeFile, chmod } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getHooksDir, ensureDir, expandHome } from '../utils/paths.js'
-import { getAllProfileDenyRules } from '../profiles/index.js'
+import { getAllProfileDenyRules, profiles } from '../profiles/index.js'
 import { SAFE_BASH_ALLOW_RULES, READ_ONLY_BASH_SAFE, READ_ONLY_BASH_FILE_READERS, HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES } from '../constants.js'
 import type { ClaudeSettings } from '../types.js'
 
@@ -23,7 +23,33 @@ export function getCsgRulesPath(): string {
 /**
  * Collect all rules that are managed by csg profiles.
  */
-function collectManagedRuleSets(): {
+/**
+ * Collect all allow rules from all profiles (bare tool names like Read, Bash, etc.)
+ */
+function collectAllProfileAllowRules(): readonly string[] {
+  const allAllow = new Set<string>()
+  for (const profile of Object.values(profiles)) {
+    for (const rule of profile.allow) {
+      allAllow.add(rule)
+    }
+  }
+  return [...allAllow]
+}
+
+/**
+ * Collect all ask rules from all profiles.
+ */
+function collectAllProfileAskRules(): readonly string[] {
+  const allAsk = new Set<string>()
+  for (const profile of Object.values(profiles)) {
+    for (const rule of profile.ask ?? []) {
+      allAsk.add(rule)
+    }
+  }
+  return [...allAsk]
+}
+
+export function collectManagedRuleSets(): {
   readonly managedDeny: ReadonlySet<string>
   readonly managedAllow: ReadonlySet<string>
   readonly managedAsk: ReadonlySet<string>
@@ -34,10 +60,12 @@ function collectManagedRuleSets(): {
       ...SAFE_BASH_ALLOW_RULES,
       ...READ_ONLY_BASH_SAFE,
       ...READ_ONLY_BASH_FILE_READERS,
+      ...collectAllProfileAllowRules(),
     ]),
     managedAsk: new Set([
       ...HARD_TO_REVERSE_ASK_RULES,
       ...STRICT_ONLY_ASK_RULES,
+      ...collectAllProfileAskRules(),
     ]),
   }
 }

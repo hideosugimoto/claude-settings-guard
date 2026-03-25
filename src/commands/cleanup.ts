@@ -3,14 +3,11 @@ import { unlink, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
-import { getAllProfileDenyRules } from '../profiles/index.js'
+import { getCsgRulesPath, collectManagedRuleSets } from '../core/automode-switch.js'
 import { printHeader, printSuccess, printWarning } from '../utils/display.js'
 import { exitWithError } from '../utils/exit.js'
 import { getGlobalSettingsPath, getHooksDir, getCommandsDir, getClaudeMdPath } from '../utils/paths.js'
-import { SAFE_BASH_ALLOW_RULES, READ_ONLY_BASH_SAFE, READ_ONLY_BASH_FILE_READERS, HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES } from '../constants.js'
 import type { ClaudeSettings } from '../types.js'
-
-import { getCsgRulesPath } from '../core/automode-switch.js'
 
 const CLAUDE_MD_BEGIN = '<!-- CSG:BASH_RULES:BEGIN -->'
 const CLAUDE_MD_END = '<!-- CSG:BASH_RULES:END -->'
@@ -28,27 +25,6 @@ export interface CleanupResult {
 }
 
 /**
- * Collect all rules managed by csg profiles.
- */
-function collectManagedRules(): {
-  readonly managedDeny: ReadonlySet<string>
-  readonly managedAllow: ReadonlySet<string>
-  readonly managedAsk: ReadonlySet<string>
-} {
-  const managedDeny = getAllProfileDenyRules()
-  const managedAllow = new Set([
-    ...SAFE_BASH_ALLOW_RULES,
-    ...READ_ONLY_BASH_SAFE,
-    ...READ_ONLY_BASH_FILE_READERS,
-  ])
-  const managedAsk = new Set([
-    ...HARD_TO_REVERSE_ASK_RULES,
-    ...STRICT_ONLY_ASK_RULES,
-  ])
-  return { managedDeny, managedAllow, managedAsk }
-}
-
-/**
  * Remove csg-managed rules from settings, preserving user-added custom rules.
  */
 function cleanSettingsRules(settings: ClaudeSettings): {
@@ -58,7 +34,7 @@ function cleanSettingsRules(settings: ClaudeSettings): {
   readonly removedAsk: readonly string[]
   readonly removedHookRegs: readonly string[]
 } {
-  const { managedDeny, managedAllow, managedAsk } = collectManagedRules()
+  const { managedDeny, managedAllow, managedAsk } = collectManagedRuleSets()
 
   const existingDeny = settings.permissions?.deny ?? []
   const existingAllow = settings.permissions?.allow ?? []
