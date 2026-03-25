@@ -100,27 +100,44 @@ describe('automode-switch', () => {
   })
 
   describe('mergeSessionSwitchHookIntoSettings', () => {
-    it('adds SessionStart hook to empty settings', () => {
+    it('adds SessionStart hook to hooks.SessionStart in empty settings', () => {
       const settings: ClaudeSettings = {}
       const result = mergeSessionSwitchHookIntoSettings(settings, '/path/to/csg-session.sh')
 
-      expect(result.SessionStart).toHaveLength(1)
-      expect(result.SessionStart?.[0].hooks[0].command).toContain('csg-session')
+      expect(result.hooks?.SessionStart).toHaveLength(1)
+      expect(result.hooks?.SessionStart?.[0].matcher).toBe('*')
+      expect(result.hooks?.SessionStart?.[0].hooks[0].command).toContain('csg-session')
     })
 
-    it('preserves existing SessionStart hooks', () => {
+    it('preserves existing hooks.SessionStart hooks', () => {
       const settings: ClaudeSettings = {
-        SessionStart: [{
-          matcher: '',
-          hooks: [{ type: 'command', command: 'other-hook.sh' }],
-        }],
+        hooks: {
+          SessionStart: [{
+            matcher: '*',
+            hooks: [{ type: 'command', command: 'other-hook.sh' }],
+          }],
+        },
       }
       const result = mergeSessionSwitchHookIntoSettings(settings, '/path/to/csg-session.sh')
 
-      expect(result.SessionStart).toHaveLength(2)
+      expect(result.hooks?.SessionStart).toHaveLength(2)
     })
 
-    it('does not duplicate if already registered', () => {
+    it('does not duplicate if already registered in hooks.SessionStart', () => {
+      const settings: ClaudeSettings = {
+        hooks: {
+          SessionStart: [{
+            matcher: '*',
+            hooks: [{ type: 'command', command: '/path/to/csg-session.sh' }],
+          }],
+        },
+      }
+      const result = mergeSessionSwitchHookIntoSettings(settings, '/path/to/csg-session.sh')
+
+      expect(result.hooks?.SessionStart).toHaveLength(1)
+    })
+
+    it('migrates legacy top-level SessionStart to hooks.SessionStart', () => {
       const settings: ClaudeSettings = {
         SessionStart: [{
           matcher: '',
@@ -129,7 +146,11 @@ describe('automode-switch', () => {
       }
       const result = mergeSessionSwitchHookIntoSettings(settings, '/path/to/csg-session.sh')
 
-      expect(result.SessionStart).toHaveLength(1)
+      // Should be in hooks.SessionStart now
+      expect(result.hooks?.SessionStart).toHaveLength(1)
+      expect(result.hooks?.SessionStart?.[0].matcher).toBe('*')
+      // Legacy top-level should be cleaned up
+      expect(result.SessionStart).toBeUndefined()
     })
 
     it('preserves other settings fields', () => {

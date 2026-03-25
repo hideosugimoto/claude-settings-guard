@@ -206,24 +206,58 @@ export function mergeSessionSwitchHookIntoSettings(
   settings: ClaudeSettings,
   hookPath: string,
 ): ClaudeSettings {
-  const existing = settings.SessionStart ?? []
+  const hooks = settings.hooks ?? {}
+  const existing = hooks.SessionStart ?? []
+
+  // Also check legacy top-level SessionStart
+  const legacyExists = (settings.SessionStart ?? []).some(rule =>
+    rule.hooks.some(h => h.command.includes('csg-session'))
+  )
 
   const alreadyExists = existing.some(rule =>
     rule.hooks.some(h => h.command.includes('csg-session'))
   )
 
-  if (alreadyExists) return settings
+  if (alreadyExists) {
+    // Remove legacy top-level entry if it exists
+    if (legacyExists) {
+      const cleanedLegacy = (settings.SessionStart ?? []).filter(rule =>
+        !rule.hooks.some(h => h.command.includes('csg-session'))
+      )
+      return {
+        ...settings,
+        SessionStart: cleanedLegacy.length > 0 ? cleanedLegacy : undefined,
+      }
+    }
+    return settings
+  }
 
   const newRule = {
-    matcher: '',
+    matcher: '*',
     hooks: [{
       type: 'command' as const,
       command: hookPath,
     }],
   }
 
+  // Remove legacy top-level entry if it exists
+  const cleanedSettings = legacyExists
+    ? (() => {
+        const cleanedLegacy = (settings.SessionStart ?? []).filter(rule =>
+          !rule.hooks.some(h => h.command.includes('csg-session'))
+        )
+        return {
+          ...settings,
+          SessionStart: cleanedLegacy.length > 0 ? cleanedLegacy : undefined,
+        }
+      })()
+    : settings
+
   return {
-    ...settings,
-    SessionStart: [...existing, newRule],
+    ...cleanedSettings,
+    hooks: {
+      ...hooks,
+      SessionStart: [...existing, newRule],
+    },
   }
 }
