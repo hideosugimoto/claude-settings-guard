@@ -70,6 +70,9 @@ export type IssueCode =
   | 'JQ_NOT_FOUND'
   | 'AUTO_MODE_HOOK_CONFLICT'
   | 'AUTO_MODE_REDUNDANT_RULES'
+  | 'AUTO_MODE_SOFT_DENY_OVERRIDE'
+  | 'AUTO_MODE_ALLOW_OVERRIDE'
+  | 'AUTO_MODE_NO_ENVIRONMENT'
 
 export interface DiagnosticIssue {
   readonly severity: Severity
