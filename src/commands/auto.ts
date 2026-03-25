@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readGlobalSettings } from '../core/settings-reader.js'
 import { writeSettings } from '../core/settings-writer.js'
 import { extractManagedRules, saveManagedRules, loadManagedRules } from '../core/automode-switch.js'
@@ -6,6 +6,21 @@ import { getGlobalSettingsPath } from '../utils/paths.js'
 import { printSuccess, printWarning, printError } from '../utils/display.js'
 import type { ClaudeSettings } from '../types.js'
 import type { CsgManagedRules } from '../core/automode-switch.js'
+
+/**
+ * Probe whether AutoMode is actually available on the current account.
+ * Runs a short `claude --permission-mode auto --print` and checks stderr
+ * for the "auto mode" banner that only appears on Team/Enterprise plans.
+ */
+function probeAutoMode(): boolean {
+  const result = spawnSync('claude', ['--permission-mode', 'auto', '--print', 'ok'], {
+    input: '',
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: 30_000,
+  })
+  const stderr = result.stderr?.toString() ?? ''
+  return /auto\s*mode/i.test(stderr)
+}
 
 /**
  * Remove CSG-managed rules from settings, preserving user-added rules.
@@ -67,6 +82,15 @@ async function restore(): Promise<void> {
 }
 
 export async function autoCommand(args: readonly string[]): Promise<void> {
+  // Check if AutoMode is available on the current account
+  process.stdout.write('AutoMode の利用可否を確認中...\n')
+  if (!probeAutoMode()) {
+    printError('AutoMode はこのアカウントでは利用できません。')
+    printError('AutoMode には Team または Enterprise プランが必要です。')
+    printError('詳細: https://docs.anthropic.com/en/docs/claude-code/auto-mode')
+    process.exit(1)
+  }
+
   const settings = await readGlobalSettings()
   if (!settings) {
     printError('settings.json が見つかりません。先に csg setup を実行してください。')
