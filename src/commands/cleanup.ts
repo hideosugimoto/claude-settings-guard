@@ -10,6 +10,8 @@ import { getGlobalSettingsPath, getHooksDir, getCommandsDir, getClaudeMdPath } f
 import { SAFE_BASH_ALLOW_RULES, READ_ONLY_BASH_SAFE, READ_ONLY_BASH_FILE_READERS, HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES } from '../constants.js'
 import type { ClaudeSettings } from '../types.js'
 
+import { getCsgRulesPath } from '../core/automode-switch.js'
+
 const CLAUDE_MD_BEGIN = '<!-- CSG:BASH_RULES:BEGIN -->'
 const CLAUDE_MD_END = '<!-- CSG:BASH_RULES:END -->'
 
@@ -81,7 +83,8 @@ function cleanSettingsRules(settings: ClaudeSettings): {
     const filtered = hooks.filter(rule => {
       const hasCsgHook = rule.hooks.some(h =>
         h.command.includes('enforce-permissions') ||
-        h.command.includes('session-diagnose')
+        h.command.includes('session-diagnose') ||
+        h.command.includes('csg-session')
       )
       if (hasCsgHook) removedHookRegs.push(`${label}: ${rule.matcher}`)
       return !hasCsgHook
@@ -160,7 +163,7 @@ async function cleanClaudeMd(): Promise<boolean> {
  */
 async function cleanHookFiles(): Promise<readonly string[]> {
   const hooksDir = getHooksDir()
-  const hookFiles = ['enforce-permissions.sh', 'session-diagnose.sh'] as const
+  const hookFiles = ['enforce-permissions.sh', 'session-diagnose.sh', 'csg-session.sh'] as const
   const removed: string[] = []
 
   for (const file of hookFiles) {
@@ -169,6 +172,13 @@ async function cleanHookFiles(): Promise<readonly string[]> {
       await unlink(path)
       removed.push(file)
     }
+  }
+
+  // Also remove csg-rules.json
+  const rulesPath = getCsgRulesPath()
+  if (existsSync(rulesPath)) {
+    await unlink(rulesPath)
+    removed.push('csg-rules.json')
   }
 
   return removed

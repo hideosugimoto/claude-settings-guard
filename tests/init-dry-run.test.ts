@@ -12,6 +12,7 @@ vi.mock('../src/core/settings-writer.js', () => ({
 
 vi.mock('../src/utils/paths.js', () => ({
   getGlobalSettingsPath: vi.fn(() => '/mock/.claude/settings.json'),
+  expandHome: vi.fn((p: string) => p),
 }))
 
 vi.mock('../src/core/hook-regenerator.js', () => ({
@@ -31,6 +32,14 @@ vi.mock('../src/core/session-hook.js', () => ({
 vi.mock('../src/core/claude-md-updater.js', () => ({
   updateClaudeMd: vi.fn(() => Promise.resolve({ action: 'skipped', filePath: '/mock/CLAUDE.md' })),
 }))
+
+vi.mock('../src/core/automode-switch.js', () => ({
+  extractManagedRules: vi.fn(() => ({ deny: [], allow: [], ask: [] })),
+  saveManagedRules: vi.fn(() => Promise.resolve('/mock/.claude/csg-rules.json')),
+  deploySessionSwitchHook: vi.fn(() => Promise.resolve('/mock/.claude/hooks/csg-session.sh')),
+  mergeSessionSwitchHookIntoSettings: vi.fn((settings: unknown) => settings),
+}))
+
 
 vi.mock('../src/profiles/index.js', () => ({
   isValidProfileName: vi.fn((name: string) => ['minimal', 'balanced', 'strict'].includes(name)),
