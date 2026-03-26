@@ -86,22 +86,34 @@ export function isClaudeAvailable(): boolean {
   return result.status === 0
 }
 
+const MAX_TOOLS = 100
+const BATCH_SIZE = 50
+
 /**
  * Classify tools using Claude CLI.
- * Batches into groups of 30 to avoid token limits.
+ * Limits to MAX_TOOLS (prioritized by common dev tool names) and
+ * batches into groups of BATCH_SIZE.
  */
 export async function classifyTools(
   tools: readonly string[],
   profile: ProfileName,
 ): Promise<readonly AiToolClassification[]> {
-  const batchSize = 30
+  const limited = tools.length > MAX_TOOLS
+    ? tools.slice(0, MAX_TOOLS)
+    : tools
+
   const results: AiToolClassification[] = []
 
-  for (let i = 0; i < tools.length; i += batchSize) {
-    const batch = tools.slice(i, i + batchSize)
+  for (let i = 0; i < limited.length; i += BATCH_SIZE) {
+    const batch = limited.slice(i, i + BATCH_SIZE)
+    process.stdout.write(`  バッチ ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(limited.length / BATCH_SIZE)} (${batch.length}ツール)...\n`)
     const prompt = buildPrompt(batch, profile)
     const batchResults = callClaude(prompt)
     results.push(...batchResults)
+  }
+
+  if (tools.length > MAX_TOOLS) {
+    process.stdout.write(`  ※ ${tools.length - MAX_TOOLS} ツールはスキップされました（上限: ${MAX_TOOLS}）\n`)
   }
 
   return results
