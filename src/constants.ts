@@ -109,6 +109,19 @@ export const HARD_TO_REVERSE_ASK_RULES: readonly string[] = expandGitCVariants([
   'Bash(cargo publish)',
 ])
 
+// High-risk system commands that should require confirmation even in minimal profile.
+// These can cause irreversible damage to disks, OS settings, or directory services.
+export const HIGH_RISK_SYSTEM_ASK_RULES: readonly string[] = [
+  'Bash(dd *)',
+  'Bash(osascript *)',
+  'Bash(dscl *)',
+  'Bash(ldapmodify *)',
+  'Bash(diskutil *)',
+  'Bash(csrutil *)',
+  'Bash(spctl *)',
+  'Bash(dseditgroup *)',
+]
+
 // Additional ask rules for strict profile only (infra/remote operations)
 export const STRICT_ONLY_ASK_RULES: readonly string[] = [
   'Bash(ssh *)',

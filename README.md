@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/claude-settings-guard)](https://www.npmjs.com/package/claude-settings-guard)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-821%20passed-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-1045%20passed-brightgreen)]()
 
 [日本語](#日本語) | [English](#english)
 
@@ -176,7 +176,7 @@ csg enforce --dry-run
 |------|------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Bash(chmod 777 *)`, `Bash(chmod +s *)` |
 | allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (ベア `Bash` は ask 競合により自動除去、安全なサブコマンドで補償) |
-| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, `Bash(pnpm publish *)` 等 21 ルール |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)` 等 21 ルール + 高リスクシステムコマンド (`dd`, `osascript`, `dscl`, `diskutil` 等) 8 ルール |
 | フック | enforce-permissions のみ |
 
 #### balanced（推奨デフォルト）
@@ -375,7 +375,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # ビルド
-npm test               # テスト実行 (35 files, 821 tests)
+npm test               # テスト実行 (54 files, 1045 tests)
 npx tsx src/index.ts   # ローカル実行
 ```
 
@@ -405,6 +405,7 @@ src/
 │   ├── claude-md-updater.ts  # CLAUDE.md Bash ルール管理
 │   ├── session-hook.ts       # セッション起動時フック
 │   ├── telemetry-analyzer.ts # テレメトリ分析
+│   ├── ai-classifier.ts     # AI ツール分類 (Claude CLI 連携)
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 フレーミング
 ├── mcp-server.ts         # MCP サーバー
 ├── profiles/             # プロファイル定義
@@ -582,7 +583,7 @@ Auto-allows most tools. For users who want minimal confirmation prompts.
 |---------|---------|
 | deny | `Bash(sudo *)`, `Bash(rm -rf /*)`, `Bash(chmod 777 *)`, `Bash(chmod +s *)` |
 | allow | `Read`, `Edit`, `Write`, `Glob`, `Grep` (bare `Bash` auto-removed due to ask conflict, compensated with safe subcommands) |
-| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, `Bash(pnpm publish *)`, etc. (21 rules) |
+| ask | `Bash(git push *)`, `Bash(git reset --hard *)`, `Bash(npm publish *)`, etc. (21 rules) + high-risk system commands (`dd`, `osascript`, `dscl`, `diskutil`, etc.) (8 rules) |
 | hooks | enforce-permissions only |
 
 #### balanced (Recommended Default)
@@ -781,7 +782,7 @@ git clone https://github.com/hideosugimoto/claude-settings-guard.git
 cd claude-settings-guard
 npm install
 npm run build          # Build
-npm test               # Run tests (35 files, 821 tests)
+npm test               # Run tests (54 files, 1045 tests)
 npx tsx src/index.ts   # Run locally
 ```
 
@@ -811,6 +812,7 @@ src/
 │   ├── claude-md-updater.ts  # CLAUDE.md Bash rules management
 │   ├── session-hook.ts       # Session startup hook
 │   ├── telemetry-analyzer.ts # Telemetry analysis
+│   ├── ai-classifier.ts     # AI tool classification (Claude CLI integration)
 │   └── mcp-protocol.ts      # JSON-RPC 2.0 framing
 ├── mcp-server.ts         # MCP server
 ├── profiles/             # Profile definitions

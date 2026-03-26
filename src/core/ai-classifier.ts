@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { ProfileName, AiToolClassification, RiskLevel, Recommendation, RecommendAction } from '../types.js'
 
 const PROFILE_DESCRIPTIONS: Record<ProfileName, string> = {
-  minimal: `速度重視。ほとんどのツールは safe に分類せよ。外部への不可逆な変更（本番デプロイ、データ削除、リモートへの書き込み等）のみ needs-confirmation とし、特権昇格（sudo, su）やシステム破壊（rm -rf /）のみ dangerous とせよ。`,
+  minimal: `速度重視。ほとんどのツールは safe に分類せよ。外部への不可逆な変更（本番デプロイ、データ削除、リモートへの書き込み等）のみ needs-confirmation とし、特権昇格（sudo, su）やシステム破壊（rm -rf /）のみ dangerous とせよ。ただし以下の高リスクコマンドは必ず needs-confirmation 以上に分類せよ: dd（ディスク直接書き込み）, osascript（macOS スクリプト実行）, dscl（ディレクトリサービス変更）, ldapmodify（LDAP変更）, diskutil（ディスク操作）, csrutil（SIP設定変更）, spctl（Gatekeeper変更）, dseditgroup（グループ変更）。`,
   balanced: `開発の利便性とセキュリティのバランス。ローカル開発ツール（ビルド、テスト、lint、フォーマッタ）は safe。外部状態を変更するもの（DB操作、ネットワーク送信、デプロイ、publish）は needs-confirmation。特権昇格・壊滅的破壊操作は dangerous。`,
   smart: `AutoMode 相当の基準。ローカル開発（ビルド、テスト、lint、git操作）は safe。外部通信・インフラ変更・リモートシェル・クラウド操作・DB変更は needs-confirmation。特権昇格（sudo, su）・壊滅的破壊（rm -rf /）・コード実行難読化（eval）は dangerous。`,
   strict: `セキュリティ最優先。読み取り専用・純粋なローカル処理のみ safe。外部通信を含む全てのネットワーク操作・DB操作・インフラ変更・パッケージインストールは needs-confirmation。特権昇格・破壊操作・eval・base64 は dangerous。`,
@@ -29,11 +29,18 @@ const subcommandSchema = z.object({
   reason: val.reason ?? val.description ?? '',
 }))
 
+// AI may return subcommands as a single object instead of an array — normalize to array
+const flexibleArrayOf = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    (val) => (val != null && !Array.isArray(val) ? [val] : val),
+    z.array(schema),
+  )
+
 const classificationSchema = z.object({
   tool: z.string(),
   risk: z.enum(['safe', 'needs-confirmation', 'dangerous', 'skip']),
   reason: z.string(),
-  subcommands: z.array(subcommandSchema).optional(),
+  subcommands: flexibleArrayOf(subcommandSchema).optional(),
 })
 
 const responseSchema = z.array(classificationSchema)

@@ -17,6 +17,6 @@
 - enforce-permissions.sh の deny ルールはスクリプト生成時にハードコードされる
 - PreToolUse hook input に `permission_mode` フィールドが含まれる
 
-### TODO（次回セッション）
-1. AI分類レスポンスで `subcommands` がオブジェクトで返された場合の zod スキーマ修正（配列に変換）— バッチ失敗の原因
-2. minimal プロファイルでも `dd`, `osascript`, `dscl`, `ldapmodify` 等の高リスクコマンドを ask にするプロンプト調整
+### 対応済み（2026-03-26）
+1. ✅ AI分類レスポンスで `subcommands` がオブジェクトで返された場合の zod スキーマ修正（`flexibleArrayOf` で配列に正規化）
+2. ✅ minimal プロファイルでも `dd`, `osascript`, `dscl`, `ldapmodify` 等の高リスクコマンドを ask に（プロンプト調整 + `HIGH_RISK_SYSTEM_ASK_RULES` 静的ルール追加）
