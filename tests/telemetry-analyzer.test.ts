@@ -18,7 +18,7 @@ function createEvent(
       event_name: eventName,
       client_timestamp: new Date().toISOString(),
       additional_metadata: JSON.stringify({
-        tool_name: toolName,
+        toolName,
         ...(command ? { command } : {}),
       }),
     },
@@ -26,11 +26,11 @@ function createEvent(
 }
 
 describe('analyzePermissionEvents', () => {
-  it('counts allowed events', () => {
+  it('counts allowed events (user manually approved)', () => {
     const events = [
-      createEvent('tool_use_allowed', 'Bash', 'npm install'),
-      createEvent('tool_use_allowed', 'Bash', 'npm install'),
-      createEvent('tool_use_allowed', 'Bash', 'npm install'),
+      createEvent('tengu_tool_use_granted_in_prompt_temporary', 'Bash', 'npm install'),
+      createEvent('tengu_tool_use_granted_in_prompt_temporary', 'Bash', 'npm install'),
+      createEvent('tengu_tool_use_granted_in_prompt_permanent', 'Bash', 'npm install'),
     ]
 
     const stats = analyzePermissionEvents(events)
@@ -41,8 +41,8 @@ describe('analyzePermissionEvents', () => {
 
   it('counts denied events', () => {
     const events = [
-      createEvent('tool_use_denied', 'Bash', 'sudo rm'),
-      createEvent('tool_use_denied', 'Bash', 'sudo rm'),
+      createEvent('tengu_tool_use_denied_in_config', 'Bash', 'sudo rm'),
+      createEvent('tengu_tool_use_rejected_in_prompt', 'Bash', 'sudo rm'),
     ]
 
     const stats = analyzePermissionEvents(events)
@@ -51,12 +51,35 @@ describe('analyzePermissionEvents', () => {
     expect(sudoStats?.allowed).toBe(0)
   })
 
+  it('counts prompted events', () => {
+    const events = [
+      createEvent('tengu_tool_use_show_permission_request', 'Edit'),
+    ]
+
+    const stats = analyzePermissionEvents(events)
+    const editStats = stats.get('Edit')
+    expect(editStats?.prompted).toBe(1)
+  })
+
+  it('counts bare tool name when no command in metadata', () => {
+    const events = [
+      createEvent('tengu_tool_use_granted_in_prompt_temporary', 'Bash'),
+      createEvent('tengu_tool_use_granted_in_prompt_temporary', 'Bash'),
+      createEvent('tengu_tool_use_granted_in_prompt_temporary', 'Bash'),
+    ]
+
+    const stats = analyzePermissionEvents(events)
+    const bashStats = stats.get('Bash')
+    expect(bashStats?.allowed).toBe(3)
+  })
+
   it('ignores non-permission events', () => {
     const events: TelemetryEvent[] = [{
       event_type: 'ClaudeCodeInternalEvent',
       event_data: {
-        event_name: 'session_started',
+        event_name: 'tengu_tool_use_success',
         client_timestamp: new Date().toISOString(),
+        additional_metadata: JSON.stringify({ toolName: 'Bash' }),
       },
     }]
 
@@ -68,7 +91,7 @@ describe('analyzePermissionEvents', () => {
     const events: TelemetryEvent[] = [{
       event_type: 'ClaudeCodeInternalEvent',
       event_data: {
-        event_name: 'permission_allowed',
+        event_name: 'tengu_tool_use_granted_in_prompt_temporary',
         client_timestamp: new Date().toISOString(),
       },
     }]

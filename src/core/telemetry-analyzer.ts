@@ -38,10 +38,12 @@ function parseToolFromEvent(event: TelemetryEvent): { tool: string; pattern: str
   try {
     const parsed = typeof meta === 'string' ? JSON.parse(meta) : meta
     const tool = parsed.tool_name ?? parsed.toolName
-    const command = parsed.tool_command ?? parsed.command ?? ''
-
     if (!tool) return null
 
+    // Claude Code telemetry does not include the specific Bash command
+    // in permission events — only the tool name (e.g. "Bash", "Edit").
+    // For Bash, we return the bare tool name.
+    const command = parsed.tool_command ?? parsed.command ?? ''
     const pattern = command ? `${tool}(${command})` : tool
     return { tool, pattern }
   } catch {
@@ -49,20 +51,42 @@ function parseToolFromEvent(event: TelemetryEvent): { tool: string; pattern: str
   }
 }
 
+// Claude Code telemetry event names for permission decisions.
+// Only match events that represent actual permission decisions,
+// not progress/success/error events.
+const PERMISSION_EVENT_NAMES = new Set([
+  'tengu_tool_use_granted_in_prompt_temporary',
+  'tengu_tool_use_granted_in_prompt_permanent',
+  'tengu_tool_use_denied_in_config',
+  'tengu_tool_use_rejected_in_prompt',
+  'tengu_tool_use_can_use_tool_rejected',
+  'tengu_tool_use_show_permission_request',
+  'tengu_tool_use_granted_by_permission_hook',
+])
+
 function isPermissionEvent(event: TelemetryEvent): boolean {
-  const name = event.event_data.event_name
-  return name.includes('permission') ||
-    name.includes('tool_use') ||
-    name.includes('allow') ||
-    name.includes('deny')
+  return PERMISSION_EVENT_NAMES.has(event.event_data.event_name)
 }
 
 function getEventDecision(event: TelemetryEvent): 'allowed' | 'denied' | 'prompted' | null {
   const name = event.event_data.event_name
-  if (name.includes('allowed') || name.includes('approved')) return 'allowed'
-  if (name.includes('denied') || name.includes('rejected') || name.includes('blocked')) return 'denied'
-  if (name.includes('prompted') || name.includes('asked')) return 'prompted'
-  return null
+  switch (name) {
+    // User manually approved in prompt
+    case 'tengu_tool_use_granted_in_prompt_temporary':
+    case 'tengu_tool_use_granted_in_prompt_permanent':
+    case 'tengu_tool_use_granted_by_permission_hook':
+      return 'allowed'
+    // Denied by config or rejected by user
+    case 'tengu_tool_use_denied_in_config':
+    case 'tengu_tool_use_rejected_in_prompt':
+    case 'tengu_tool_use_can_use_tool_rejected':
+      return 'denied'
+    // Permission dialog was shown
+    case 'tengu_tool_use_show_permission_request':
+      return 'prompted'
+    default:
+      return null
+  }
 }
 
 export interface TelemetryLoadResult {
