@@ -16,3 +16,7 @@
 - AutoMode 時も settings.json の deny/allow は分類器より先に評価される
 - enforce-permissions.sh の deny ルールはスクリプト生成時にハードコードされる
 - PreToolUse hook input に `permission_mode` フィールドが含まれる
+
+### TODO（次回セッション）
+1. AI分類レスポンスで `subcommands` がオブジェクトで返された場合の zod スキーマ修正（配列に変換）— バッチ失敗の原因
+2. minimal プロファイルでも `dd`, `osascript`, `dscl`, `ldapmodify` 等の高リスクコマンドを ask にするプロンプト調整
