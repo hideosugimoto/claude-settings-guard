@@ -21,11 +21,12 @@ const subcommandSchema = z.object({
   subcommand: z.string().optional(),
   command: z.string().optional(),
   risk: z.enum(['safe', 'needs-confirmation', 'dangerous']),
-  reason: z.string(),
+  reason: z.string().optional(),
+  description: z.string().optional(),
 }).transform(val => ({
   pattern: val.pattern ?? val.subcommand ?? val.command ?? '',
   risk: val.risk,
-  reason: val.reason,
+  reason: val.reason ?? val.description ?? '',
 }))
 
 const classificationSchema = z.object({
