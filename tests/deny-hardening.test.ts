@@ -147,53 +147,35 @@ describe('C1: Recommendation engine filters cross-tool bypass allow rules', () =
 // C2: recommendation-applier deny-priority check
 // ============================================================
 describe('C2: recommendation-applier filters conflicting allow recommendations', () => {
-  it('does not add allow rule that directly conflicts with existing deny', () => {
-    const settings: ClaudeSettings = {
-      permissions: {
-        deny: ['Read(**/.env)'],
-        allow: [],
-      },
-    }
-    const recs: Recommendation[] = [
-      { action: 'add-allow', pattern: 'Read(**/.env)', reason: 'test' },
-    ]
-    const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Read(**/.env)')
-  })
-
-  it('does not add allow rule that conflicts with newly added deny', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: [], allow: [] },
-    }
+  it('deny in recommendations takes precedence over allow', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
       { action: 'add-deny', pattern: 'Read(**/.env)', reason: 'test' },
       { action: 'add-allow', pattern: 'Read(**/.env)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedDeny).toContain('Read(**/.env)')
-    expect(result.addedAllow).not.toContain('Read(**/.env)')
+    expect(result.finalDeny).toContain('Read(**/.env)')
+    expect(result.finalAllow).not.toContain('Read(**/.env)')
   })
 
   it('allows non-conflicting allow rules through', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Read(**/.env)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Read(**/.env)', reason: 'test' },
       { action: 'add-allow', pattern: 'Bash(npm *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).toContain('Bash(npm *)')
+    expect(result.finalAllow).toContain('Bash(npm *)')
   })
 
   it('filters cross-tool conflicting allow (Bash(cat *) vs Read deny)', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Read(**/.env)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Read(**/.env)', reason: 'test' },
       { action: 'add-allow', pattern: 'Bash(cat *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Bash(cat *)')
+    expect(result.finalAllow).not.toContain('Bash(cat *)')
   })
 })
 
@@ -370,22 +352,19 @@ describe('M2: Profiles include secrets Write/Edit deny', () => {
 // ============================================================
 describe('M3: applyRecommendations never adds patterns that are in deny', () => {
   it('even with multiple recs, deny always wins', () => {
-    const settings: ClaudeSettings = {
-      permissions: {
-        deny: ['Read(**/.env)', 'Bash(sudo *)'],
-        allow: [],
-      },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Read(**/.env)', reason: 'deny' },
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Read(**/.env)', reason: 'frequent' },
       { action: 'add-allow', pattern: 'Bash(sudo *)', reason: 'frequent' },
       { action: 'add-allow', pattern: 'Bash(npm *)', reason: 'frequent' },
     ]
     const result = applyRecommendations(settings, recs)
 
-    expect(result.addedAllow).not.toContain('Read(**/.env)')
-    expect(result.addedAllow).not.toContain('Bash(sudo *)')
-    expect(result.addedAllow).toContain('Bash(npm *)')
+    expect(result.finalAllow).not.toContain('Read(**/.env)')
+    expect(result.finalAllow).not.toContain('Bash(sudo *)')
+    expect(result.finalAllow).toContain('Bash(npm *)')
   })
 })
 
@@ -480,32 +459,24 @@ describe('H3: Missing paired Grep deny detection', () => {
 // M1: recommendation-applier blocks prefix commands
 // ============================================================
 describe('M1: recommendation-applier blocks prefix bypass allow rules', () => {
-  it('does not add Bash(env *) when Bash deny exists', () => {
-    const settings: ClaudeSettings = {
-      permissions: {
-        deny: ['Bash(sudo *)'],
-        allow: [],
-      },
-    }
+  it('does not add Bash(env *) when Bash deny is in recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(env *)', reason: 'frequent' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Bash(env *)')
+    expect(result.finalAllow).not.toContain('Bash(env *)')
   })
 
-  it('does not add Bash(command *) when Bash deny exists', () => {
-    const settings: ClaudeSettings = {
-      permissions: {
-        deny: ['Bash(rm -rf /*)'],
-        allow: [],
-      },
-    }
+  it('does not add Bash(command *) when Bash deny is in recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(rm -rf /*)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(command *)', reason: 'frequent' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Bash(command *)')
+    expect(result.finalAllow).not.toContain('Bash(command *)')
   })
 })
 
@@ -546,15 +517,14 @@ describe('R3-H1: Grep deny triggers cross-tool bypass detection', () => {
     expect(recs.find(r => r.pattern === 'Bash(cat *)')).toBeUndefined()
   })
 
-  it('recommendation applier blocks Bash(cat *) when only Grep deny exists', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Grep(**/.env)'], allow: [] },
-    }
+  it('recommendation applier blocks Bash(cat *) when Grep deny is in recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Grep(**/.env)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(cat *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Bash(cat *)')
+    expect(result.finalAllow).not.toContain('Bash(cat *)')
   })
 
   it('diagnose checkCrossToolBypasses warns for Bash(cat *) vs Grep deny', async () => {
@@ -585,7 +555,7 @@ describe('R3-H2: PREFIX_COMMANDS includes hook prefix commands', () => {
     })
   }
 
-  it('recommendation engine blocks Bash(strace *) when Bash deny exists', () => {
+  it('recommendation applier blocks Bash(strace *) when Bash deny is in recommendations', () => {
     const stats = createStats([
       { pattern: 'Bash(strace *)', allowed: 5, denied: 0 },
     ])
@@ -594,14 +564,13 @@ describe('R3-H2: PREFIX_COMMANDS includes hook prefix commands', () => {
   })
 
   it('recommendation applier blocks Bash(strace *) when Bash deny exists', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Bash(sudo *)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(strace *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
-    expect(result.addedAllow).not.toContain('Bash(strace *)')
+    expect(result.finalAllow).not.toContain('Bash(strace *)')
   })
 })
 

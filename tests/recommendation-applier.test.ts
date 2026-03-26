@@ -3,8 +3,8 @@ import { applyRecommendations } from '../src/core/recommendation-applier.js'
 import type { ClaudeSettings, Recommendation } from '../src/types.js'
 
 describe('applyRecommendations', () => {
-  it('adds allow recommendations to permissions.allow', () => {
-    const settings: ClaudeSettings = { permissions: { allow: ['Read(*)'] } }
+  it('adds allow recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [{
       action: 'add-allow',
       pattern: 'Bash(npm test)',
@@ -12,35 +12,103 @@ describe('applyRecommendations', () => {
     }]
 
     const result = applyRecommendations(settings, recs)
-    expect(result.settings.permissions?.allow).toEqual(['Read(*)', 'Bash(npm test)'])
-    expect(result.addedAllow).toEqual(['Bash(npm test)'])
+    expect(result.finalAllow).toContain('Bash(npm test)')
+    expect(result.addedAllow).toContain('Bash(npm test)')
   })
 
-  it('adds deny recommendations to permissions.deny', () => {
-    const settings: ClaudeSettings = { permissions: { deny: ['Bash(sudo *)'] } }
+  it('adds deny recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [{
       action: 'add-deny',
       pattern: 'Bash(rm -rf /*)',
-      reason: 'frequent deny',
+      reason: 'deny',
     }]
 
     const result = applyRecommendations(settings, recs)
-    expect(result.settings.permissions?.deny).toEqual(['Bash(sudo *)', 'Bash(rm -rf /*)'])
-    expect(result.addedDeny).toEqual(['Bash(rm -rf /*)'])
+    expect(result.finalDeny).toContain('Bash(rm -rf /*)')
+    expect(result.addedDeny).toContain('Bash(rm -rf /*)')
     expect(result.hasDenyChanges).toBe(true)
   })
 
-  it('does not add duplicates', () => {
-    const settings: ClaudeSettings = { permissions: { allow: ['Bash(npm test)'] } }
+  it('adds ask recommendations', () => {
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [{
-      action: 'add-allow',
-      pattern: 'Bash(npm test)',
-      reason: 'duplicate',
+      action: 'add-ask',
+      pattern: 'Bash(ssh *)',
+      reason: 'needs confirmation',
     }]
 
     const result = applyRecommendations(settings, recs)
-    expect(result.settings.permissions?.allow).toEqual(['Bash(npm test)'])
-    expect(result.addedAllow).toHaveLength(0)
+    expect(result.finalAsk).toContain('Bash(ssh *)')
+    expect(result.addedAsk).toContain('Bash(ssh *)')
+  })
+
+  it('clears CSG-managed rules and rebuilds from recommendations', () => {
+    // Simulate existing CSG-managed rules in settings
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: ['Read', 'Glob', 'Grep', 'Bash(git add *)'],
+        deny: ['Bash(sudo *)'],
+        ask: ['Bash(git push *)'],
+      },
+    }
+
+    // Recommend only a subset — the managed rules not in recs should be cleared
+    const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
+      { action: 'add-allow', pattern: 'Read', reason: 'allow' },
+    ]
+
+    const result = applyRecommendations(settings, recs)
+    // CSG-managed rules not in recs should be gone
+    expect(result.finalAllow).not.toContain('Bash(git add *)')
+    expect(result.finalAsk).not.toContain('Bash(git push *)')
+    // Recommended rules should be present
+    expect(result.finalDeny).toContain('Bash(sudo *)')
+    expect(result.finalAllow).toContain('Read')
+  })
+
+  it('preserves user-added custom rules', () => {
+    const settings: ClaudeSettings = {
+      permissions: {
+        allow: ['Read', 'Bash(my-custom-tool *)'],
+        deny: ['Bash(sudo *)'],
+      },
+    }
+
+    const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
+      { action: 'add-allow', pattern: 'Read', reason: 'allow' },
+    ]
+
+    const result = applyRecommendations(settings, recs)
+    // User-added rule should be preserved
+    expect(result.finalAllow).toContain('Bash(my-custom-tool *)')
+    expect(result.finalAllow).toContain('Read')
+  })
+
+  it('deny takes precedence over allow', () => {
+    const settings: ClaudeSettings = {}
+    const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(rm *)', reason: 'deny' },
+      { action: 'add-allow', pattern: 'Bash(rm *)', reason: 'allow' },
+    ]
+
+    const result = applyRecommendations(settings, recs)
+    expect(result.finalDeny).toContain('Bash(rm *)')
+    expect(result.finalAllow).not.toContain('Bash(rm *)')
+  })
+
+  it('ask takes precedence over allow', () => {
+    const settings: ClaudeSettings = {}
+    const recs: Recommendation[] = [
+      { action: 'add-ask', pattern: 'Bash(curl *)', reason: 'ask' },
+      { action: 'add-allow', pattern: 'Bash(curl *)', reason: 'allow' },
+    ]
+
+    const result = applyRecommendations(settings, recs)
+    expect(result.finalAsk).toContain('Bash(curl *)')
+    expect(result.finalAllow).not.toContain('Bash(curl *)')
   })
 
   it('does not mutate original settings', () => {
@@ -54,16 +122,5 @@ describe('applyRecommendations', () => {
     const result = applyRecommendations(settings, recs)
     expect(result.settings).not.toBe(settings)
     expect(settings.permissions?.deny).toEqual([])
-    expect(result.settings.permissions?.deny).toEqual(['Bash(sudo *)'])
-  })
-
-  it('returns no changes for empty recommendations', () => {
-    const settings: ClaudeSettings = {}
-    const result = applyRecommendations(settings, [])
-
-    expect(result.settings).toBe(settings)
-    expect(result.addedAllow).toEqual([])
-    expect(result.addedDeny).toEqual([])
-    expect(result.hasDenyChanges).toBe(false)
   })
 })

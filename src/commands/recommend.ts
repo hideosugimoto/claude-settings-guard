@@ -7,8 +7,9 @@ import {
 import { scanInstalledBinaries } from '../core/path-scanner.js'
 import { isClaudeAvailable, classifyTools, classificationsToRecommendations } from '../core/ai-classifier.js'
 import { detectProfile } from '../core/profile-detector.js'
-import { isValidProfileName } from '../profiles/index.js'
+import { getProfile, isValidProfileName } from '../profiles/index.js'
 import { collectManagedBashBinaries } from '../core/rule-coverage-checker.js'
+import { DEFAULT_DENY_RULES, HARD_TO_REVERSE_ASK_RULES, SAFE_BASH_ALLOW_RULES, READ_ONLY_BASH_SAFE, READ_ONLY_BASH_FILE_READERS } from '../constants.js'
 import { printHeader, printRecommendation, printSuccess, printWarning, printError } from '../utils/display.js'
 import { exitWithError } from '../utils/exit.js'
 import { confirm } from '../utils/prompt.js'
@@ -17,12 +18,6 @@ import { regenerateEnforceHook, ensureHookRegistered } from '../core/hook-regene
 import { writeSettings } from '../core/settings-writer.js'
 import { getGlobalSettingsPath } from '../utils/paths.js'
 import type { ProfileName, Recommendation } from '../types.js'
-
-export interface RecommendResult {
-  readonly recommendations: readonly Recommendation[]
-  readonly scanCount: number
-  readonly profile: ProfileName
-}
 
 export async function runTelemetryRecommend(): Promise<{ recommendations: readonly Recommendation[]; eventCount: number }> {
   const settings = await readGlobalSettings()
@@ -40,13 +35,62 @@ export async function runTelemetryRecommend(): Promise<{ recommendations: readon
   return { recommendations, eventCount: events.length }
 }
 
+/**
+ * Build recommendations from profile constants (DEFAULT_DENY_RULES, profile deny/ask, etc.)
+ * These are the baseline rules that always apply regardless of AI scan.
+ */
+function buildProfileBaselineRecommendations(profile: ProfileName): readonly Recommendation[] {
+  const profileDef = getProfile(profile)
+  const recommendations: Recommendation[] = []
+
+  // Profile deny rules + DEFAULT_DENY_RULES
+  const profileAskSet = new Set(profileDef.ask ?? [])
+  const allDeny = [...new Set([
+    ...DEFAULT_DENY_RULES.filter(r => !profileAskSet.has(r)),
+    ...profileDef.deny,
+  ])]
+  for (const pattern of allDeny) {
+    recommendations.push({ action: 'add-deny', pattern, reason: 'プロファイル基本ルール', source: 'ai-scan' })
+  }
+
+  // Profile ask rules
+  for (const pattern of profileDef.ask ?? []) {
+    recommendations.push({ action: 'add-ask', pattern, reason: 'プロファイル基本ルール', source: 'ai-scan' })
+  }
+
+  // Profile allow rules (bare tools like Read, Write, Edit, Glob, Grep)
+  for (const pattern of profileDef.allow) {
+    recommendations.push({ action: 'add-allow', pattern, reason: 'プロファイル基本ルール', source: 'ai-scan' })
+  }
+
+  // Safe Bash allow rules (compensation for profiles without bare Bash)
+  if (profileDef.readOnlyBash) {
+    for (const pattern of READ_ONLY_BASH_SAFE) {
+      recommendations.push({ action: 'add-allow', pattern, reason: '読み取り専用コマンド', source: 'ai-scan' })
+    }
+    for (const pattern of READ_ONLY_BASH_FILE_READERS) {
+      recommendations.push({ action: 'add-allow', pattern, reason: 'ファイル読み取りコマンド', source: 'ai-scan' })
+    }
+  }
+
+  // SAFE_BASH_ALLOW_RULES (git, npm, docker safe commands etc.)
+  const askSet = new Set(profileDef.ask ?? [])
+  const denySet = new Set(allDeny)
+  for (const pattern of SAFE_BASH_ALLOW_RULES) {
+    if (!askSet.has(pattern) && !denySet.has(pattern)) {
+      recommendations.push({ action: 'add-allow', pattern, reason: '安全なBashコマンド', source: 'ai-scan' })
+    }
+  }
+
+  return recommendations
+}
+
 async function runToolScan(profile: ProfileName): Promise<{ recommendations: readonly Recommendation[]; scanned: number; found: number }> {
   process.stdout.write('  インストール済みツールをスキャン中...\n')
 
   const allBinaries = await scanInstalledBinaries()
   process.stdout.write(`  ${allBinaries.length} バイナリを検出\n`)
 
-  // Filter out binaries already covered by existing rules
   const coveredBinaries = collectManagedBashBinaries()
   const uncoveredBinaries = allBinaries.filter(b => !coveredBinaries.has(b))
   process.stdout.write(`  ${uncoveredBinaries.length} ツールが未カバー（${allBinaries.length - uncoveredBinaries.length} 件はCSGルールでカバー済み）\n`)
@@ -95,7 +139,10 @@ export async function recommendCommand(options: {
     return
   }
 
-  // Run tool scan (primary)
+  // Step 1: Build baseline from profile constants
+  const baselineRecs = buildProfileBaselineRecommendations(profile)
+
+  // Step 2: Run AI tool scan for uncovered tools
   let scanRecommendations: readonly Recommendation[] = []
   try {
     const scanResult = await runToolScan(profile)
@@ -104,57 +151,51 @@ export async function recommendCommand(options: {
     printWarning(`ツールスキャンでエラー: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // Run telemetry analysis (secondary)
-  const telemetryResult = await runTelemetryRecommend()
-  const telemetryRecommendations = telemetryResult.recommendations
-
-  // Merge: deduplicate by pattern, scan takes precedence
-  const seenPatterns = new Set(scanRecommendations.map(r => r.pattern))
-  const mergedRecommendations = [
+  // Step 3: Merge baseline + AI scan (deduplicate, AI takes precedence)
+  const aiPatterns = new Set(scanRecommendations.map(r => r.pattern))
+  const allRecommendations = [
+    ...baselineRecs.filter(r => !aiPatterns.has(r.pattern)),
     ...scanRecommendations,
-    ...telemetryRecommendations.filter(r => !seenPatterns.has(r.pattern)),
   ]
 
-  if (mergedRecommendations.length === 0) {
-    process.stdout.write('\n')
-    printSuccess('推薦事項はありません。現在の設定は適切です。')
-    return
-  }
+  // Display the full picture: what settings.json will look like after apply
+  const allowRecs = allRecommendations.filter(r => r.action === 'add-allow')
+  const askRecs = allRecommendations.filter(r => r.action === 'add-ask')
+  const denyRecs = allRecommendations.filter(r => r.action === 'add-deny')
 
-  // Display grouped by action
   process.stdout.write('\n')
-  const allowRecs = mergedRecommendations.filter(r => r.action === 'add-allow')
-  const askRecs = mergedRecommendations.filter(r => r.action === 'add-ask')
-  const denyRecs = mergedRecommendations.filter(r => r.action === 'add-deny')
+  process.stdout.write(`  === 再構成結果（CSG管理ルールをクリアして再設定） ===\n\n`)
 
-  if (allowRecs.length > 0) {
-    process.stdout.write(`Allow に追加推薦 (${allowRecs.length}件):\n`)
-    for (const rec of allowRecs) printRecommendation(rec)
-    process.stdout.write('\n')
-  }
-  if (askRecs.length > 0) {
-    process.stdout.write(`Ask に追加推薦 (${askRecs.length}件):\n`)
-    for (const rec of askRecs) printRecommendation(rec)
-    process.stdout.write('\n')
-  }
   if (denyRecs.length > 0) {
-    process.stdout.write(`Deny に追加推薦 (${denyRecs.length}件):\n`)
+    process.stdout.write(`Deny (${denyRecs.length}件):\n`)
     for (const rec of denyRecs) printRecommendation(rec)
     process.stdout.write('\n')
   }
+  if (askRecs.length > 0) {
+    process.stdout.write(`Ask (${askRecs.length}件):\n`)
+    for (const rec of askRecs) printRecommendation(rec)
+    process.stdout.write('\n')
+  }
+  if (allowRecs.length > 0) {
+    process.stdout.write(`Allow (${allowRecs.length}件):\n`)
+    for (const rec of allowRecs) printRecommendation(rec)
+    process.stdout.write('\n')
+  }
+
+  process.stdout.write(`  合計: deny=${denyRecs.length} ask=${askRecs.length} allow=${allowRecs.length}\n`)
 
   if (options.dryRun) {
-    process.stdout.write('(dry-run: 変更は適用されません)\n')
+    process.stdout.write('\n(dry-run: 変更は適用されません)\n')
     return
   }
 
   const autoYes = options.yes ?? false
   const interactive = process.stdin.isTTY && process.stdout.isTTY
-  const shouldApply = autoYes || (interactive ? await confirm('推薦を適用しますか？') : false)
+  const shouldApply = autoYes || (interactive ? await confirm('\nCSG管理ルールをクリアして再構成しますか？') : false)
 
   if (!shouldApply) return
 
-  const applied = applyRecommendations(settings, mergedRecommendations)
+  const applied = applyRecommendations(settings, allRecommendations)
 
   const hookInfo = applied.hasDenyChanges
     ? await (async () => {
@@ -173,16 +214,10 @@ export async function recommendCommand(options: {
     exitWithError(`設定の書き込みに失敗しました: ${result.error}`)
   }
 
-  printSuccess('推薦を適用しました')
-  if (applied.addedAllow.length > 0) {
-    process.stdout.write(`  allow 追加 (${applied.addedAllow.length}件)\n`)
-  }
-  if (applied.addedAsk.length > 0) {
-    process.stdout.write(`  ask 追加 (${applied.addedAsk.length}件)\n`)
-  }
-  if (applied.addedDeny.length > 0) {
-    process.stdout.write(`  deny 追加 (${applied.addedDeny.length}件)\n`)
-  }
+  printSuccess('ルールを再構成しました')
+  process.stdout.write(`  deny: ${applied.finalDeny.length}件\n`)
+  process.stdout.write(`  ask:  ${applied.finalAsk.length}件\n`)
+  process.stdout.write(`  allow: ${applied.finalAllow.length}件\n`)
   if (result.backupPath) {
     process.stdout.write(`  バックアップ: ${result.backupPath}\n`)
   }

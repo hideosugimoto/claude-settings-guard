@@ -1,8 +1,12 @@
 import { FILE_READ_COMMANDS, FILE_WRITE_COMMANDS, PREFIX_COMMANDS } from '../constants.js'
+import { collectManagedRuleSets } from '../profiles/index.js'
 import type { ClaudeSettings, Recommendation } from '../types.js'
 
 export interface ApplyResult {
   readonly settings: ClaudeSettings
+  readonly finalAllow: readonly string[]
+  readonly finalAsk: readonly string[]
+  readonly finalDeny: readonly string[]
   readonly addedAllow: readonly string[]
   readonly addedDeny: readonly string[]
   readonly addedAsk: readonly string[]
@@ -11,13 +15,10 @@ export interface ApplyResult {
 
 /**
  * Check if an allow pattern conflicts with any deny rules.
- * Handles both direct conflicts (same pattern) and cross-tool bypasses.
  */
 function conflictsWithDeny(allowPattern: string, denyPatterns: readonly string[]): boolean {
-  // Direct conflict: exact same pattern in deny
   if (denyPatterns.includes(allowPattern)) return true
 
-  // Cross-tool bypass: Bash file commands vs Read/Write/Edit deny
   const bashMatch = allowPattern.match(/^Bash\((\S+)/)
   if (!bashMatch) return false
 
@@ -29,89 +30,113 @@ function conflictsWithDeny(allowPattern: string, denyPatterns: readonly string[]
   if (FILE_READ_COMMANDS.has(cmd) && hasReadDeny) return true
   if (FILE_WRITE_COMMANDS.has(cmd) && (hasWriteDeny || hasEditDeny)) return true
 
-  // Prefix bypass: prefix commands vs Bash deny
   const hasBashDeny = denyPatterns.some(d => d.startsWith('Bash('))
   if (PREFIX_COMMANDS.has(cmd) && hasBashDeny) return true
 
   return false
 }
 
-function uniqueAppend(
-  base: readonly string[],
-  additions: readonly string[]
-): { readonly values: readonly string[]; readonly added: readonly string[] } {
-  const baseSet = new Set(base)
-  const added = additions.filter(item => !baseSet.has(item))
-  return {
-    values: [...base, ...added],
-    added,
-  }
+/**
+ * Identify which existing rules are CSG-managed (from profiles/constants)
+ * vs user-added custom rules.
+ */
+function separateUserRules(
+  existing: readonly string[],
+  managedSet: ReadonlySet<string>,
+): { managed: readonly string[]; userAdded: readonly string[] } {
+  const managed = existing.filter(r => managedSet.has(r))
+  const userAdded = existing.filter(r => !managedSet.has(r))
+  return { managed, userAdded }
 }
 
+/**
+ * Apply recommendations by clearing CSG-managed rules and rebuilding.
+ * User-added custom rules are preserved.
+ *
+ * Flow:
+ * 1. Identify CSG-managed rules in current settings
+ * 2. Remove CSG-managed rules (keep user-added rules)
+ * 3. Build new allow/ask/deny from recommendations
+ * 4. Merge with preserved user rules
+ */
 export function applyRecommendations(
   settings: ClaudeSettings,
   recommendations: readonly Recommendation[]
 ): ApplyResult {
-  // Process deny first so we can filter allow against the full deny set
-  const denyTargets = recommendations
+  const currentPermissions = settings.permissions ?? {}
+  const { managedAllow, managedAsk, managedDeny } = collectManagedRuleSets()
+
+  // Collect all managed patterns into single sets
+  const allManagedAllow = new Set([...managedAllow])
+  const allManagedAsk = new Set([...managedAsk])
+  const allManagedDeny = new Set([...managedDeny])
+
+  // Separate user-added rules from CSG-managed rules
+  const existingAllow = separateUserRules(currentPermissions.allow ?? [], allManagedAllow)
+  const existingAsk = separateUserRules(currentPermissions.ask ?? [], allManagedAsk)
+  const existingDeny = separateUserRules(currentPermissions.deny ?? [], allManagedDeny)
+
+  // Build new rules from recommendations
+  const recDeny = recommendations
     .filter(rec => rec.action === 'add-deny')
     .map(rec => rec.pattern)
 
-  const currentPermissions = settings.permissions ?? {}
-  const deny = uniqueAppend(currentPermissions.deny ?? [], denyTargets)
-
-  // Build the complete deny set (existing + newly added)
-  const allDenyPatterns = deny.values
-
-  // Process ask targets
-  const askTargets = recommendations
+  const recAsk = recommendations
     .filter(rec => rec.action === 'add-ask')
     .map(rec => rec.pattern)
-    .filter(pattern => !allDenyPatterns.includes(pattern))
 
-  const ask = uniqueAppend(currentPermissions.ask ?? [], askTargets)
-
-  // Filter allow targets: remove any that conflict with deny or ask rules
-  const allAskPatterns = ask.values
-  const allowTargets = recommendations
+  const recAllow = recommendations
     .filter(rec => rec.action === 'add-allow')
     .map(rec => rec.pattern)
-    .filter(pattern => !conflictsWithDeny(pattern, allDenyPatterns))
-    .filter(pattern => !allAskPatterns.includes(pattern))
 
-  const allow = uniqueAppend(currentPermissions.allow ?? [], allowTargets)
-  const hasAllowChanges = allow.added.length > 0
-  const hasDenyChanges = deny.added.length > 0
-  const hasAskChanges = ask.added.length > 0
-  if (!hasAllowChanges && !hasDenyChanges && !hasAskChanges) {
-    return {
-      settings,
-      addedAllow: [],
-      addedDeny: [],
-      addedAsk: [],
-      hasDenyChanges: false,
-    }
-  }
+  // Merge: user-added rules + new recommendations (deduplicated)
+  const finalDeny = [...new Set([...existingDeny.userAdded, ...recDeny])].sort()
+  const denySet = new Set(finalDeny)
 
-  const nextAllow = hasAllowChanges || currentPermissions.allow ? allow.values : undefined
-  const nextDeny = hasDenyChanges || currentPermissions.deny ? deny.values : undefined
-  const nextAsk = hasAskChanges || currentPermissions.ask ? ask.values : undefined
+  const finalAsk = [...new Set([
+    ...existingAsk.userAdded,
+    ...recAsk.filter(r => !denySet.has(r)),
+  ])].sort()
+  const askSet = new Set(finalAsk)
+
+  const finalAllow = [...new Set([
+    ...existingAllow.userAdded,
+    ...recAllow
+      .filter(r => !denySet.has(r))
+      .filter(r => !askSet.has(r))
+      .filter(r => !conflictsWithDeny(r, finalDeny)),
+  ])].sort()
+
+  // Check if deny changed compared to original
+  const originalDenySet = new Set(currentPermissions.deny ?? [])
+  const hasDenyChanges = finalDeny.length !== originalDenySet.size ||
+    finalDeny.some(r => !originalDenySet.has(r))
 
   const updatedSettings: ClaudeSettings = {
     ...settings,
     permissions: {
       ...currentPermissions,
-      ...(nextAllow ? { allow: [...nextAllow] } : {}),
-      ...(nextDeny ? { deny: [...nextDeny] } : {}),
-      ...(nextAsk ? { ask: [...nextAsk] } : {}),
+      allow: finalAllow,
+      deny: finalDeny,
+      ask: finalAsk,
     },
   }
 
+  // Compute added (new vs original) for backward compat
+  const originalAllowSet = new Set(currentPermissions.allow ?? [])
+  const originalAskSet = new Set(currentPermissions.ask ?? [])
+  const addedAllow = finalAllow.filter(r => !originalAllowSet.has(r))
+  const addedDeny = finalDeny.filter(r => !originalDenySet.has(r))
+  const addedAsk = finalAsk.filter(r => !originalAskSet.has(r))
+
   return {
     settings: updatedSettings,
-    addedAllow: allow.added,
-    addedDeny: deny.added,
-    addedAsk: ask.added,
+    finalAllow,
+    finalAsk,
+    finalDeny,
+    addedAllow,
+    addedDeny,
+    addedAsk,
     hasDenyChanges,
   }
 }

@@ -1,5 +1,5 @@
 import type { Profile, ProfileName } from '../types.js'
-import { DEFAULT_DENY_RULES } from '../constants.js'
+import { DEFAULT_DENY_RULES, SAFE_BASH_ALLOW_RULES, READ_ONLY_BASH_SAFE, READ_ONLY_BASH_FILE_READERS, HARD_TO_REVERSE_ASK_RULES, STRICT_ONLY_ASK_RULES, SMART_ASK_RULES } from '../constants.js'
 import { minimalProfile } from './minimal.js'
 import { balancedProfile } from './balanced.js'
 import { strictProfile } from './strict.js'
@@ -42,4 +42,34 @@ export function getAllProfileDenyRules(): ReadonlySet<string> {
     _cachedAllProfileDenyRules = allRules
   }
   return _cachedAllProfileDenyRules
+}
+
+/**
+ * Collect all managed rule sets (deny, allow, ask) across all profiles + constants.
+ * Used by recommendation-applier to distinguish managed rules from user-added rules.
+ */
+export function collectManagedRuleSets(): {
+  readonly managedDeny: ReadonlySet<string>
+  readonly managedAllow: ReadonlySet<string>
+  readonly managedAsk: ReadonlySet<string>
+} {
+  const managedDeny = new Set<string>(DEFAULT_DENY_RULES)
+  const managedAllow = new Set<string>([
+    ...SAFE_BASH_ALLOW_RULES,
+    ...READ_ONLY_BASH_SAFE,
+    ...READ_ONLY_BASH_FILE_READERS,
+  ])
+  const managedAsk = new Set<string>([
+    ...HARD_TO_REVERSE_ASK_RULES,
+    ...STRICT_ONLY_ASK_RULES,
+    ...SMART_ASK_RULES,
+  ])
+
+  for (const profile of Object.values(profiles)) {
+    for (const rule of profile.deny) managedDeny.add(rule)
+    for (const rule of profile.allow) managedAllow.add(rule)
+    for (const rule of profile.ask ?? []) managedAsk.add(rule)
+  }
+
+  return { managedDeny, managedAllow, managedAsk }
 }

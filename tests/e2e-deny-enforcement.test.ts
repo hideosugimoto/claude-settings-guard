@@ -494,41 +494,38 @@ describe('E2E: 推奨エンジンの deny-first フィルタリング', () => {
 // ============================================================
 describe('E2E: 推奨適用エンジンが deny と衝突する allow を除外する', () => {
   it('直接衝突: deny にあるパターンは allow に追加されない', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Bash(sudo *)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(sudo *)', reason: 'test' },
       { action: 'add-allow', pattern: 'Bash(npm *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
 
-    expect(result.addedAllow).not.toContain('Bash(sudo *)')
-    expect(result.addedAllow).toContain('Bash(npm *)')
+    expect(result.finalAllow).not.toContain('Bash(sudo *)')
+    expect(result.finalAllow).toContain('Bash(npm *)')
   })
 
   it('クロスツール衝突: cat allow は Read deny があるとき追加されない', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Read(**/.env)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Read(**/.env)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(cat *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
 
-    expect(result.addedAllow).not.toContain('Bash(cat *)')
+    expect(result.finalAllow).not.toContain('Bash(cat *)')
   })
 
   it('プレフィクスバイパス: env allow は Bash deny があるとき追加されない', () => {
-    const settings: ClaudeSettings = {
-      permissions: { deny: ['Bash(sudo *)'], allow: [] },
-    }
+    const settings: ClaudeSettings = {}
     const recs: Recommendation[] = [
+      { action: 'add-deny', pattern: 'Bash(sudo *)', reason: 'deny' },
       { action: 'add-allow', pattern: 'Bash(env *)', reason: 'test' },
     ]
     const result = applyRecommendations(settings, recs)
 
-    expect(result.addedAllow).not.toContain('Bash(env *)')
+    expect(result.finalAllow).not.toContain('Bash(env *)')
   })
 
   it('deny は常に追加される（フィルタされない）', () => {
