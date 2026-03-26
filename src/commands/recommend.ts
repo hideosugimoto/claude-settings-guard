@@ -26,7 +26,7 @@ export interface RecommendResult {
 
 export async function runTelemetryRecommend(): Promise<{ recommendations: readonly Recommendation[]; eventCount: number }> {
   const settings = await readGlobalSettings()
-  if (!settings) return []
+  if (!settings) return { recommendations: [], eventCount: 0 }
 
   const rules = extractAllRules(settings)
   const allAllow = [...rules.allowRules, ...rules.legacyAllowedTools]
@@ -56,7 +56,10 @@ async function runToolScan(profile: ProfileName): Promise<{ recommendations: rea
   }
 
   process.stdout.write(`  Claude AI で分類中（プロファイル: ${profile}）...\n`)
-  const classifications = await classifyTools(uncoveredBinaries, profile)
+  const classifications = classifyTools(uncoveredBinaries, profile)
+  const skipped = classifications.filter(c => c.risk === 'skip').length
+  const devTools = classifications.filter(c => c.risk !== 'skip').length
+  process.stdout.write(`  AI分類完了: ${devTools} 件の開発ツール検出（${skipped} 件は開発無関係としてスキップ）\n`)
   const recommendations = classificationsToRecommendations(classifications, profile)
 
   return { recommendations, scanned: allBinaries.length, found: uncoveredBinaries.length }

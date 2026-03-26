@@ -9,7 +9,7 @@ const PROFILE_DESCRIPTIONS: Record<ProfileName, string> = {
   strict: `セキュリティ最優先。読み取り専用・純粋なローカル処理のみ safe。外部通信を含む全てのネットワーク操作・DB操作・インフラ変更・パッケージインストールは needs-confirmation。特権昇格・破壊操作・eval・base64 は dangerous。`,
 }
 
-const RISK_TO_ACTION: Record<ProfileName, Record<RiskLevel, RecommendAction>> = {
+const RISK_TO_ACTION: Record<ProfileName, Record<Exclude<RiskLevel, 'skip'>, RecommendAction>> = {
   minimal: { safe: 'add-allow', 'needs-confirmation': 'add-allow', dangerous: 'add-ask' },
   balanced: { safe: 'add-allow', 'needs-confirmation': 'add-ask', dangerous: 'add-ask' },
   smart: { safe: 'add-allow', 'needs-confirmation': 'add-ask', dangerous: 'add-deny' },
@@ -17,14 +17,20 @@ const RISK_TO_ACTION: Record<ProfileName, Record<RiskLevel, RecommendAction>> = 
 }
 
 const subcommandSchema = z.object({
-  pattern: z.string(),
+  pattern: z.string().optional(),
+  subcommand: z.string().optional(),
+  command: z.string().optional(),
   risk: z.enum(['safe', 'needs-confirmation', 'dangerous']),
   reason: z.string(),
-})
+}).transform(val => ({
+  pattern: val.pattern ?? val.subcommand ?? val.command ?? '',
+  risk: val.risk,
+  reason: val.reason,
+}))
 
 const classificationSchema = z.object({
   tool: z.string(),
-  risk: z.enum(['safe', 'needs-confirmation', 'dangerous']),
+  risk: z.enum(['safe', 'needs-confirmation', 'dangerous', 'skip']),
   reason: z.string(),
   subcommands: z.array(subcommandSchema).optional(),
 })
@@ -36,23 +42,26 @@ function buildPrompt(tools: readonly string[], profile: ProfileName): string {
   const toolList = tools.join('\n')
 
   return `You are a security classifier for Claude Code (an AI coding assistant that executes CLI commands).
-Classify each CLI tool by risk level for use inside an AI coding session.
+Your job is to classify CLI tools that a developer has installed on their machine.
+
+IMPORTANT: First, determine if each tool is relevant to an AI coding session. Many installed binaries are system utilities, media codecs, crypto test tools, or other programs that Claude Code would never need to execute. Classify those as "skip".
 
 Profile: ${profile}
 Criteria: ${profileDesc}
 
 Risk levels:
-- "safe": The tool can be auto-allowed. Low risk, no side effects outside the project.
-- "needs-confirmation": The tool requires user confirmation before execution. Modifies external state or has potential for damage.
-- "dangerous": The tool should be blocked. Privilege escalation, system destruction, or obfuscated execution.
+- "skip": NOT a development tool. System utility, media codec, crypto test, hardware diagnostic, or other tool that Claude Code would never use in a coding session. Use this for the majority of obscure system binaries.
+- "safe": Development tool that can be auto-allowed. Low risk, no side effects outside the project. Examples: linters, formatters, build tools, local test runners.
+- "needs-confirmation": Development tool that requires user confirmation. Modifies external state, network operations, deployment, package installation from network. Examples: package managers (install), database clients, cloud CLIs.
+- "dangerous": Tool that should be blocked. Privilege escalation, system destruction, or obfuscated execution.
 
-For tools with mixed-risk subcommands (e.g., kubectl get=safe, kubectl delete=needs-confirmation), provide subcommand-level classification in the "subcommands" array. Use the format "toolname subcommand" for the pattern field (e.g., "kubectl get *", "kubectl delete *"). Only add subcommands when the tool genuinely has different risk levels for different operations.
+For tools classified as safe/needs-confirmation/dangerous that have mixed-risk subcommands (e.g., brew list=safe, brew install=needs-confirmation), provide subcommand-level classification. Only add subcommands when the tool genuinely has different risk levels for different operations.
 
 Classify these ${tools.length} tools:
 ${toolList}
 
 Respond with ONLY a JSON array (no markdown, no explanation):
-[{"tool":"name","risk":"safe|needs-confirmation|dangerous","reason":"brief explanation","subcommands":[{"pattern":"name subcommand *","risk":"safe|needs-confirmation|dangerous","reason":"brief"}]}]`
+[{"tool":"name","risk":"skip|safe|needs-confirmation|dangerous","reason":"brief explanation"}]`
 }
 
 function stripMarkdownFences(raw: string): string {
@@ -65,7 +74,6 @@ function stripMarkdownFences(raw: string): string {
 function parseResponse(raw: string): readonly AiToolClassification[] {
   const cleaned = stripMarkdownFences(raw)
 
-  // Try to find JSON array in the response
   const jsonStart = cleaned.indexOf('[')
   const jsonEnd = cleaned.lastIndexOf(']')
   if (jsonStart === -1 || jsonEnd === -1) return []
@@ -86,18 +94,17 @@ export function isClaudeAvailable(): boolean {
   return result.status === 0
 }
 
-const MAX_TOOLS = 100
-const BATCH_SIZE = 50
+const MAX_TOOLS = 200
+const BATCH_SIZE = 100
 
 /**
  * Classify tools using Claude CLI.
- * Limits to MAX_TOOLS (prioritized by common dev tool names) and
- * batches into groups of BATCH_SIZE.
+ * Limits to MAX_TOOLS and batches into groups of BATCH_SIZE.
  */
-export async function classifyTools(
+export function classifyTools(
   tools: readonly string[],
   profile: ProfileName,
-): Promise<readonly AiToolClassification[]> {
+): readonly AiToolClassification[] {
   const limited = tools.length > MAX_TOOLS
     ? tools.slice(0, MAX_TOOLS)
     : tools
@@ -107,9 +114,13 @@ export async function classifyTools(
   for (let i = 0; i < limited.length; i += BATCH_SIZE) {
     const batch = limited.slice(i, i + BATCH_SIZE)
     process.stdout.write(`  バッチ ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(limited.length / BATCH_SIZE)} (${batch.length}ツール)...\n`)
-    const prompt = buildPrompt(batch, profile)
-    const batchResults = callClaude(prompt)
-    results.push(...batchResults)
+    try {
+      const prompt = buildPrompt(batch, profile)
+      const batchResults = callClaude(prompt)
+      results.push(...batchResults)
+    } catch (err) {
+      process.stderr.write(`  [warn] バッチ ${Math.floor(i / BATCH_SIZE) + 1} の分類に失敗、スキップ: ${err instanceof Error ? err.message : String(err)}\n`)
+    }
   }
 
   if (tools.length > MAX_TOOLS) {
@@ -120,7 +131,8 @@ export async function classifyTools(
 }
 
 function callClaude(prompt: string): readonly AiToolClassification[] {
-  const result = spawnSync('claude', ['--print', '--output-format', 'json', '-p', prompt], {
+  // Use --output-format text to avoid JSON wrapping issues with escaped characters
+  const result = spawnSync('claude', ['--print', '-p', prompt], {
     input: '',
     stdio: ['pipe', 'pipe', 'pipe'],
     timeout: 120_000,
@@ -137,19 +149,12 @@ function callClaude(prompt: string): readonly AiToolClassification[] {
     throw new Error('Claude CLI returned empty response')
   }
 
-  try {
-    // --output-format json wraps in {"result":"..."}
-    const outer = JSON.parse(stdout)
-    const inner = typeof outer.result === 'string' ? outer.result : stdout
-    return parseResponse(inner)
-  } catch {
-    // Fallback: try parsing stdout directly
-    return parseResponse(stdout)
-  }
+  return parseResponse(stdout)
 }
 
 /**
  * Convert AI classifications to Recommendation objects based on profile.
+ * Skips tools classified as "skip".
  */
 export function classificationsToRecommendations(
   classifications: readonly AiToolClassification[],
@@ -159,12 +164,27 @@ export function classificationsToRecommendations(
   const recommendations: Recommendation[] = []
 
   for (const classification of classifications) {
+    // Skip tools AI determined are not relevant for coding sessions
+    if (classification.risk === 'skip') continue
+
     if (classification.subcommands && classification.subcommands.length > 0) {
-      // Subcommand-level recommendations
       for (const sub of classification.subcommands) {
-        const pattern = sub.pattern.startsWith('Bash(')
-          ? sub.pattern
-          : `Bash(${sub.pattern})`
+        // Skip empty patterns from AI response
+        if (!sub.pattern) continue
+
+        // Ensure pattern includes the tool name prefix
+        let pattern: string
+        if (sub.pattern.startsWith('Bash(')) {
+          pattern = sub.pattern
+        } else if (sub.pattern.startsWith(classification.tool)) {
+          pattern = `Bash(${sub.pattern})`
+        } else {
+          // AI returned just the subcommand (e.g., "list" instead of "brew list")
+          const suffix = sub.pattern.endsWith(' *') || sub.pattern.endsWith(')')
+            ? sub.pattern
+            : `${sub.pattern} *`
+          pattern = `Bash(${classification.tool} ${suffix})`
+        }
         recommendations.push({
           action: mapping[sub.risk],
           pattern,
@@ -173,7 +193,6 @@ export function classificationsToRecommendations(
         })
       }
     } else {
-      // Tool-level recommendation
       recommendations.push({
         action: mapping[classification.risk],
         pattern: `Bash(${classification.tool} *)`,

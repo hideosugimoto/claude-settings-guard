@@ -84,7 +84,7 @@ export interface Recommendation {
 }
 
 // AI classifier types
-export type RiskLevel = 'safe' | 'needs-confirmation' | 'dangerous'
+export type RiskLevel = 'safe' | 'needs-confirmation' | 'dangerous' | 'skip'
 
 export interface AiToolClassification {
   readonly tool: string
@@ -92,7 +92,7 @@ export interface AiToolClassification {
   readonly reason: string
   readonly subcommands?: readonly {
     readonly pattern: string
-    readonly risk: RiskLevel
+    readonly risk: Exclude<RiskLevel, 'skip'>
     readonly reason: string
   }[]
 }
