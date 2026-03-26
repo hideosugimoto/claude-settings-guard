@@ -95,7 +95,7 @@ export function isClaudeAvailable(): boolean {
   return result.status === 0
 }
 
-const MAX_TOOLS = 200
+const MAX_TOOLS = 2000
 const BATCH_SIZE = 100
 
 /**
