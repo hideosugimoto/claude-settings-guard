@@ -46,9 +46,11 @@ export function printRecommendation(rec: Recommendation): void {
     ? chalk.green('[+allow]')
     : rec.action === 'add-deny'
       ? chalk.red('[+deny]')
-      : rec.action === 'remove'
-        ? chalk.yellow('[remove]')
-        : chalk.blue('[migrate]')
+      : rec.action === 'add-ask'
+        ? chalk.yellow('[+ask]')
+        : rec.action === 'remove'
+          ? chalk.yellow('[remove]')
+          : chalk.blue('[migrate]')
 
   process.stdout.write(`  ${actionLabel} ${chalk.bold(rec.pattern)}\n`)
   process.stdout.write(`    ${chalk.dim(rec.reason)}`)

@@ -1,7 +1,7 @@
 import chalk from 'chalk'
 import { runDiagnose } from './diagnose.js'
 import { checkMigration, applyMigration } from './migrate.js'
-import { runRecommend } from './recommend.js'
+import { runTelemetryRecommend } from './recommend.js'
 import { initCommand } from './init.js'
 import { confirm, select } from '../utils/prompt.js'
 import { printHeader, printIssue, printMigration, printRecommendation, printSuccess, printWarning } from '../utils/display.js'
@@ -87,7 +87,7 @@ async function stepMigration(autoYes: boolean): Promise<void> {
 
 async function stepRecommend(): Promise<void> {
   printStepHeader(3, 'テレメトリ推薦')
-  const { recommendations, eventCount } = await runRecommend()
+  const { recommendations, eventCount } = await runTelemetryRecommend()
 
   if (eventCount === 0) {
     printSuccess('テレメトリデータなし → スキップ (使用後に `csg recommend` で再確認)')

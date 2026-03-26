@@ -11,7 +11,7 @@ vi.mock('../src/commands/migrate.js', () => ({
 }))
 
 vi.mock('../src/commands/recommend.js', () => ({
-  runRecommend: vi.fn().mockResolvedValue({ recommendations: [], eventCount: 0 }),
+  runTelemetryRecommend: vi.fn().mockResolvedValue({ recommendations: [], eventCount: 0 }),
 }))
 
 vi.mock('../src/commands/init.js', () => ({

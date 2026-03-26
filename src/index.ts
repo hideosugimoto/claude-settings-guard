@@ -72,11 +72,13 @@ program
 
 program
   .command('recommend')
-  .description('テレメトリデータを分析し、権限設定の推薦を行う')
+  .description('インストール済みツールをAI分析し、権限設定の推薦を行う')
   .option('-y, --yes', '推薦を確認なしで適用する')
+  .option('--profile <name>', 'プロファイル (minimal, balanced, strict, smart)')
+  .option('--dry-run', '変更を適用せず、推薦のみ表示する')
   .action(async (opts) => {
     try {
-      await recommendCommand({ yes: opts.yes })
+      await recommendCommand({ yes: opts.yes, profile: opts.profile, dryRun: opts.dryRun })
     } catch (err) {
       handleCommandError(err)
     }

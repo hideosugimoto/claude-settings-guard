@@ -69,17 +69,32 @@ export interface DiagnosticIssue {
   readonly fix?: string
 }
 
-export type RecommendAction = 'add-allow' | 'add-deny' | 'remove' | 'migrate'
+export type RecommendAction = 'add-allow' | 'add-deny' | 'add-ask' | 'remove' | 'migrate'
 
 export interface Recommendation {
   readonly action: RecommendAction
   readonly pattern: string
   readonly reason: string
+  readonly source?: 'telemetry' | 'ai-scan'
   readonly stats?: {
     readonly allowed: number
     readonly denied: number
     readonly prompted: number
   }
+}
+
+// AI classifier types
+export type RiskLevel = 'safe' | 'needs-confirmation' | 'dangerous'
+
+export interface AiToolClassification {
+  readonly tool: string
+  readonly risk: RiskLevel
+  readonly reason: string
+  readonly subcommands?: readonly {
+    readonly pattern: string
+    readonly risk: RiskLevel
+    readonly reason: string
+  }[]
 }
 
 export interface TelemetryEvent {

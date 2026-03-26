@@ -5,6 +5,7 @@ export interface ApplyResult {
   readonly settings: ClaudeSettings
   readonly addedAllow: readonly string[]
   readonly addedDeny: readonly string[]
+  readonly addedAsk: readonly string[]
   readonly hasDenyChanges: boolean
 }
 
@@ -62,26 +63,39 @@ export function applyRecommendations(
   // Build the complete deny set (existing + newly added)
   const allDenyPatterns = deny.values
 
-  // Filter allow targets: remove any that conflict with deny rules
+  // Process ask targets
+  const askTargets = recommendations
+    .filter(rec => rec.action === 'add-ask')
+    .map(rec => rec.pattern)
+    .filter(pattern => !allDenyPatterns.includes(pattern))
+
+  const ask = uniqueAppend(currentPermissions.ask ?? [], askTargets)
+
+  // Filter allow targets: remove any that conflict with deny or ask rules
+  const allAskPatterns = ask.values
   const allowTargets = recommendations
     .filter(rec => rec.action === 'add-allow')
     .map(rec => rec.pattern)
     .filter(pattern => !conflictsWithDeny(pattern, allDenyPatterns))
+    .filter(pattern => !allAskPatterns.includes(pattern))
 
   const allow = uniqueAppend(currentPermissions.allow ?? [], allowTargets)
   const hasAllowChanges = allow.added.length > 0
   const hasDenyChanges = deny.added.length > 0
-  if (!hasAllowChanges && !hasDenyChanges) {
+  const hasAskChanges = ask.added.length > 0
+  if (!hasAllowChanges && !hasDenyChanges && !hasAskChanges) {
     return {
       settings,
       addedAllow: [],
       addedDeny: [],
+      addedAsk: [],
       hasDenyChanges: false,
     }
   }
 
   const nextAllow = hasAllowChanges || currentPermissions.allow ? allow.values : undefined
   const nextDeny = hasDenyChanges || currentPermissions.deny ? deny.values : undefined
+  const nextAsk = hasAskChanges || currentPermissions.ask ? ask.values : undefined
 
   const updatedSettings: ClaudeSettings = {
     ...settings,
@@ -89,6 +103,7 @@ export function applyRecommendations(
       ...currentPermissions,
       ...(nextAllow ? { allow: [...nextAllow] } : {}),
       ...(nextDeny ? { deny: [...nextDeny] } : {}),
+      ...(nextAsk ? { ask: [...nextAsk] } : {}),
     },
   }
 
@@ -96,6 +111,7 @@ export function applyRecommendations(
     settings: updatedSettings,
     addedAllow: allow.added,
     addedDeny: deny.added,
+    addedAsk: ask.added,
     hasDenyChanges,
   }
 }
