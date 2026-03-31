@@ -64,7 +64,7 @@ export const GLOBAL_SETTINGS_PATH = '~/.claude/settings.json'
 export const LOCAL_SETTINGS_PATH = '~/.claude/settings.local.json'
 export const BACKUP_DIR = '~/.claude/backups'
 export const HOOKS_DIR = '~/.claude/hooks'
-export const COMMANDS_DIR = '~/.claude/commands'
+export const SKILLS_DIR = '~/.claude/skills'
 export const TELEMETRY_DIR = '~/.claude/telemetry'
 
 // Commands that can read file contents (bypass Read deny via Bash)

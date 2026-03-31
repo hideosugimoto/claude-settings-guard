@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, rename, unlink, rmdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getCommandsDir, ensureDir } from '../utils/paths.js'
+import { getSkillsDir, getLegacyCommandsDir, ensureDir } from '../utils/paths.js'
 import { printSuccess, printWarning } from '../utils/display.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -41,40 +41,70 @@ async function loadTemplate(templateName: string): Promise<string> {
   }
 }
 
-export interface DeployResult {
-  readonly deployed: readonly string[]
-  readonly skipped: readonly string[]
+export async function migrateFromCommands(): Promise<readonly string[]> {
+  const legacyDir = getLegacyCommandsDir()
+  if (!existsSync(legacyDir)) return []
+
+  const skillsDir = getSkillsDir()
+  await ensureDir(skillsDir)
+
+  const migrated: string[] = []
+  for (const cmd of SLASH_COMMANDS) {
+    const legacyPath = join(legacyDir, cmd.filename)
+    if (!existsSync(legacyPath)) continue
+
+    const targetPath = join(skillsDir, cmd.filename)
+    if (existsSync(targetPath)) {
+      // skills/ に既にある場合は commands/ 側を削除するだけ
+      await unlink(legacyPath)
+    } else {
+      await rename(legacyPath, targetPath)
+    }
+    migrated.push(cmd.filename)
+  }
+
+  // Remove legacy dir if empty
+  try {
+    await rmdir(legacyDir)
+  } catch {
+    // Not empty (user has other files) — leave it
+  }
+
+  return migrated
 }
 
-export async function deploySlashCommands(options: { force?: boolean } = {}): Promise<DeployResult> {
-  const commandsDir = getCommandsDir()
-  await ensureDir(commandsDir)
+export interface DeployResult {
+  readonly deployed: readonly string[]
+  readonly migrated: readonly string[]
+}
 
-  const results = await Promise.all(
+export async function deploySlashCommands(): Promise<DeployResult> {
+  // Clean up legacy ~/.claude/commands/
+  const migrated = await migrateFromCommands()
+
+  const skillsDir = getSkillsDir()
+  await ensureDir(skillsDir)
+
+  // Always overwrite with latest templates
+  await Promise.all(
     SLASH_COMMANDS.map(async (cmd) => {
-      const targetPath = join(commandsDir, cmd.filename)
-
-      if (existsSync(targetPath) && !options.force) {
-        return { filename: cmd.filename, action: 'skipped' as const }
-      }
-
+      const targetPath = join(skillsDir, cmd.filename)
       const content = await loadTemplate(cmd.templateName)
       await writeFile(targetPath, content, 'utf-8')
-      return { filename: cmd.filename, action: 'deployed' as const }
     })
   )
 
   return {
-    deployed: results.filter(r => r.action === 'deployed').map(r => r.filename),
-    skipped: results.filter(r => r.action === 'skipped').map(r => r.filename),
+    deployed: SLASH_COMMANDS.map(cmd => cmd.filename),
+    migrated,
   }
 }
 
 export function printDeployResult(result: DeployResult): void {
-  for (const file of result.deployed) {
-    printSuccess(`/${file.replace('.md', '')} コマンドをインストールしました`)
+  for (const file of result.migrated) {
+    printSuccess(`/${file.replace('.md', '')} を commands/ → skills/ に移行しました`)
   }
-  for (const file of result.skipped) {
-    printWarning(`/${file.replace('.md', '')} は既にインストール済み (--force で上書き)`)
+  for (const file of result.deployed) {
+    printSuccess(`/${file.replace('.md', '')} スキルをインストールしました`)
   }
 }

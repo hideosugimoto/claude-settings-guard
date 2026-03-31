@@ -36,7 +36,11 @@ export function getHooksDir(): string {
   return join(homedir(), '.claude', 'hooks')
 }
 
-export function getCommandsDir(): string {
+export function getSkillsDir(): string {
+  return join(homedir(), '.claude', 'skills')
+}
+
+export function getLegacyCommandsDir(): string {
   return join(homedir(), '.claude', 'commands')
 }
 

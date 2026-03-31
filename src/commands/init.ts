@@ -98,7 +98,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 
   if (!dryRun) {
     process.stdout.write('スラッシュコマンドをデプロイ中...\n')
-    const deployResult = await deploySlashCommands({ force: options.force })
+    const deployResult = await deploySlashCommands()
     printDeployResult(deployResult)
 
     try {

@@ -20,7 +20,7 @@ vi.mock('../src/core/hook-regenerator.js', () => ({
 }))
 
 vi.mock('../src/commands/deploy-slash.js', () => ({
-  deploySlashCommands: vi.fn(() => Promise.resolve({ deployed: [], skipped: [], errors: [] })),
+  deploySlashCommands: vi.fn(() => Promise.resolve({ deployed: [], migrated: [] })),
   printDeployResult: vi.fn(),
 }))
 

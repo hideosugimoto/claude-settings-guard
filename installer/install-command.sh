@@ -2,10 +2,10 @@
 # Install the /improve-settings slash command for Claude Code
 set -euo pipefail
 
-COMMANDS_DIR="$HOME/.claude/commands"
-COMMAND_FILE="$COMMANDS_DIR/improve-settings.md"
+SKILLS_DIR="$HOME/.claude/skills"
+COMMAND_FILE="$SKILLS_DIR/improve-settings.md"
 
-mkdir -p "$COMMANDS_DIR"
+mkdir -p "$SKILLS_DIR"
 
 if [ -f "$COMMAND_FILE" ]; then
   echo "Already installed: $COMMAND_FILE"
