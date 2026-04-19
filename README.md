@@ -192,7 +192,7 @@ csg enforce --dry-run
 
 #### smart（AutoMode 相当）
 
-Claude Code の AutoMode（AI 分類器）の判定基準に準拠した静的ルール。ローカル開発は許可し、外部通信・破壊操作・インフラ変更のみ確認を要求。AutoMode が Team/Enterprise 限定のため、個人プランでも同等の保護を得られます。
+Claude Code の AutoMode（AI 分類器）の判定基準に準拠した静的ルール。ローカル開発は許可し、外部通信・破壊操作・インフラ変更のみ確認を要求。AutoMode は v2.1.111（2026-04-16）以降 Max プランでも利用可能になりましたが、**Pro プランでは引き続き利用不可**です。smart プロファイルは Pro ユーザーや LLM 呼び出しコストを避けたいユーザーに、AutoMode 相当の保護を静的ルールで提供します。
 
 | 設定 | 内容 |
 |------|------|
@@ -342,6 +342,20 @@ brew services * → [+ask]    バックグラウンドサービス管理
 適用時に deny ルールが追加された場合、Layer 2 強制フックが自動的に再生成されます。
 
 > **注意**: AI 分類には Claude Code CLI が必要です。ネットワーク接続が必要で、API 利用料が発生します。
+
+#### 標準 skill `/less-permission-prompts` との使い分け
+
+Claude Code v2.1.111（2026-04-16）で、セッション transcript から頻出の read-only Bash/MCP 呼び出しを検出して allowlist を提案する標準 skill `/less-permission-prompts` が追加されました。csg の `recommend` とは **入力信号と出力が異なる補完関係** です。
+
+| 観点 | `csg recommend` | `/less-permission-prompts` |
+|------|-----------------|----------------------------|
+| 入力 | PATH バイナリスキャン ＋ OTel telemetry | セッション transcript |
+| タイミング | 事前（未使用ツールも対象） | 事後（実際に使った履歴ベース） |
+| 出力 | allow / ask / **deny** 3種類 | allow のみ |
+| 分類基準 | 4 プロファイル × AI リスク分類（safe / needs-confirmation / dangerous / skip） | read-only 限定 |
+| 副作用 | settings.json 書き換え ＋ **Layer 2 フック再生成** | settings.json のみ |
+
+**推奨併用フロー**: `csg recommend` で初期設定＋ deny を固め、運用中に残る許可プロンプトは `/less-permission-prompts` で削る。transcript にしか現れないローカル固有コマンドを拾える一方、csg の核心（deny 強制、複合コマンド再検査、プロファイル保護）は引き続き csg が担います。
 
 ### MCP サーバー統合
 
@@ -599,7 +613,7 @@ Auto-allows reads, requires confirmation for writes/execution.
 
 #### smart (AutoMode-Equivalent)
 
-Static rules based on Claude Code's AutoMode (AI classifier) criteria. Allows local development freely while requiring confirmation for external communication, destructive operations, and infrastructure changes. Provides AutoMode-equivalent protection for individual Pro/Max plans where AutoMode is unavailable.
+Static rules based on Claude Code's AutoMode (AI classifier) criteria. Allows local development freely while requiring confirmation for external communication, destructive operations, and infrastructure changes. As of v2.1.111 (2026-04-16), AutoMode is now available on the Max plan, but **still unavailable on the Pro plan**. The `smart` profile provides AutoMode-equivalent protection via static rules — useful for Pro users and anyone who wants to avoid the per-call LLM classifier cost.
 
 | Setting | Content |
 |---------|---------|
@@ -749,6 +763,20 @@ brew services * → [+ask]    Manage background services
 When deny rules are added, the Layer 2 enforcement hook is automatically regenerated.
 
 > **Note**: AI classification requires Claude Code CLI. Requires network access and incurs API usage costs.
+
+#### Relationship with the built-in `/less-permission-prompts` skill
+
+Claude Code v2.1.111 (2026-04-16) introduced a built-in `/less-permission-prompts` skill that scans session transcripts for common read-only Bash/MCP tool calls and proposes a prioritized allowlist. It is **complementary to `csg recommend`**, not a replacement — the two use different input signals and produce different outputs.
+
+| Dimension | `csg recommend` | `/less-permission-prompts` |
+|-----------|-----------------|----------------------------|
+| Input | PATH binary scan + OTel telemetry | Session transcripts |
+| Timing | Proactive (covers unused tools) | Reactive (based on actual usage) |
+| Output | allow / ask / **deny** | allow only |
+| Classification | 4 profiles × AI risk (safe / needs-confirmation / dangerous / skip) | read-only focus |
+| Side effects | Writes settings.json + **regenerates Layer 2 hook** | Writes settings.json only |
+
+**Recommended combined flow**: Use `csg recommend` for initial setup and deny enforcement, then run `/less-permission-prompts` periodically to trim remaining prompts from your actual session history. The skill captures project-local commands that don't show up in a PATH scan, while csg's core value (deny enforcement, compound-command re-checking, profile-based safety) stays with csg.
 
 ### MCP Server Integration
 
