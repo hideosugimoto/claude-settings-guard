@@ -20,10 +20,10 @@ const permissionsSchema = z.object({
 
 export const claudeSettingsSchema = z.object({
   permissions: permissionsSchema.optional(),
-  hooks: z.record(z.array(hookRuleSchema)).optional(),
+  hooks: z.record(z.string(), z.array(hookRuleSchema)).optional(),
   deny: z.array(z.string()).optional(),
   allowedTools: z.array(z.string()).optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   language: z.string().optional(),
   PreToolUse: z.array(hookRuleSchema).optional(),
   PostToolUse: z.array(hookRuleSchema).optional(),

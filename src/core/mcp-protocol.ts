@@ -6,7 +6,7 @@ export const jsonRpcRequestSchema = z.object({
   jsonrpc: z.literal('2.0'),
   id: z.union([z.number(), z.string()]).optional(),
   method: z.string(),
-  params: z.record(z.unknown()).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
 })
 
 export type JsonRpcRequest = z.infer<typeof jsonRpcRequestSchema>
